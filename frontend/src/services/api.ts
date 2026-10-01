@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CONFIG } from '../../config';
-
-const BASE_URL = CONFIG.API_BASE_URL;
+const BASE_URL = 'https://naviora-backend-s6je.onrender.com/api/v1';
 
 export interface APIResponse<T> {
   data?: T;
