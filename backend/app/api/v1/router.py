@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from app.api.v1.endpoints import (
     auth,
     websocket,
@@ -36,5 +37,5 @@ api_router.include_router(navigation.router, prefix="/navigation", tags=["naviga
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(voice.router, prefix="/voice", tags=["voice"])
-api_router.include_router(feedback.router, tags=["feedback"])
+api_router.include_router(feedback.router, prefix="/feedback", tags=["feedback"])
 api_router.include_router(staff.router, prefix="/staff", tags=["staff"])
