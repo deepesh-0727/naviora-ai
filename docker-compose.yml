@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/naviora_db
+      - REDIS_URL=redis://redis:6379/0
+      - WHISPER_API_URL=http://whisper:9000
+      - PIPER_API_URL=http://piper:10200
+    depends_on:
+      - db
+      - redis
+      - whisper
+      - piper
+    restart: always
+
+  # ── Whisper STT (Speech-to-Text) ─────────────────────────────────────────
+  # Uses onerahmet/openai-whisper-asr-webservice — exposes OpenAI-compatible
+  # POST /asr endpoint. Environment selects the model size.
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+    # Use the CPU variant if no GPU is available:
+    # image: onerahmet/openai-whisper-asr-webservice:latest
+    ports:
+      - "9000:9000"
+    environment:
+      - ASR_MODEL=base          # tiny | base | small | medium | large
+      - ASR_ENGINE=openai_whisper
+    volumes:
+      - whisper_models:/root/.cache/whisper
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    # Remove the 'deploy' block above if running CPU-only
+
+  # ── Piper TTS (Text-to-Speech) ────────────────────────────────────────────
+  # Uses rhasspy/wyoming-piper — Wyoming protocol server.
+  # Exposes a simple HTTP GET /say?text=... endpoint via wyoming-http wrapper.
+  piper:
+    image: rhasspy/wyoming-piper:latest
+    ports:
+      - "10200:10200"
+    environment:
+      - PIPER_VOICE=en_US-lessac-medium
+    volumes:
+      - piper_voices:/data/voices
+    command: --voice en_US-lessac-medium --uri tcp://0.0.0.0:10200
+    restart: unless-stopped
+
+  db:
+    image: postgis/postgis:15-3.3-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=naviora_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: always
+
+  admin:
+    build:
+      context: ./frontend/web
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  postgres_data:
+  whisper_models:
+  piper_voices:

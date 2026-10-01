@@ -1,0 +1,112 @@
+# ================================
+# Python
+# ================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+
+# ================================
+# Node / React Native
+# ================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.expo/
+.expo-shared/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+dist/
+build/
+
+# Android
+frontend/android/app/build/
+frontend/android/build/
+frontend/android/.gradle/
+frontend/android/local.properties
+*.apk
+*.aab
+
+# iOS
+frontend/ios/build/
+frontend/ios/Pods/
+frontend/ios/*.xcworkspace/
+
+# ================================
+# Environment & Secrets
+# ================================
+.env
+.env.local
+.env.production
+.env.*.local
+*.env.backup
+firebase-credentials.json
+credentials/
+
+# ================================
+# Logs
+# ================================
+*.log
+logs/
+backend_err.log
+backend_out.log
+backend_test.log
+backend_test_err.log
+expo_err.log
+expo_err_local.log
+expo_out.log
+expo_out_local.log
+expo_test.log
+expo_test_err.log
+
+# ================================
+# IDEs
+# ================================
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ================================
+# Build artifacts
+# ================================
+.artifacts/
+*.pyc
+*.pyo
+*.class
+target/
+
+# ================================
+# Docker
+# ================================
+*.pid
+postgres_data/
+redis_data/
+rabbitmq_data/
+ollama_data/
+
+# ================================
+# Testing
+# ================================
+.coverage
+htmlcov/
+coverage.xml
+.tox/

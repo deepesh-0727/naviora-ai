@@ -1,0 +1,21 @@
+name: Production Deployment
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Deploy to Render / Production Server
+        run: |
+          echo "Triggering deployment pipeline for Naviora AI..."
+          # Deploy hook integration (e.g. Render deploy URL / SSH trigger)
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          else
+            echo "Render deploy hook not configured. Skipping remote trigger."
+          fi

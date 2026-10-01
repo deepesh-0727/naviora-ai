@@ -1,0 +1,123 @@
+services:
+  # ── Backend API ────────────────────────────────────────────────────────────
+  - type: web
+    name: naviora-backend
+    runtime: python
+    region: singapore
+    plan: starter
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: >
+      cd backend &&
+      alembic upgrade head &&
+      uvicorn app.main:app
+        --host 0.0.0.0
+        --port $PORT
+        --workers 4
+        --log-level info
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: PROJECT_NAME
+        value: "Naviora AI"
+      - key: SECRET_KEY
+        generateValue: true
+
+      # ── Database (Supabase) ────────────────────────────────────────────────
+      - key: DATABASE_URL
+        sync: false
+
+      # ── Redis (linked to naviora-redis below) ─────────────────────────────
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: naviora-redis
+          property: connectionString
+
+      # ── SMS (Textlocal) ────────────────────────────────────────────────────
+      - key: SMS_API_KEY
+        sync: false
+      - key: TEXTLOCAL_API_KEY
+        sync: false
+
+      # ── Email (SendGrid) ───────────────────────────────────────────────────
+      - key: EMAIL_API_KEY
+        sync: false
+
+      # ── Push notifications (Firebase) ──────────────────────────────────────
+      - key: FIREBASE_CREDENTIALS
+        sync: false
+
+      # ── Payment (Razorpay) ─────────────────────────────────────────────────
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+
+      # ── Error tracking (Sentry) ────────────────────────────────────────────
+      - key: SENTRY_DSN
+        sync: false
+
+      # ── AI provider ────────────────────────────────────────────────────────
+      - key: AI_PROVIDER
+        value: openai
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o
+
+      # ── Voice services (internal Render URLs) ──────────────────────────────
+      - key: WHISPER_API_URL
+        fromService:
+          type: web
+          name: naviora-whisper
+          property: hostport
+      - key: PIPER_API_URL
+        fromService:
+          type: web
+          name: naviora-piper
+          property: hostport
+
+  # ── Redis (Managed) ────────────────────────────────────────────────────────
+  - type: redis
+    name: naviora-redis
+    plan: free
+    region: singapore
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []            # accessible only from Render internal network
+
+  # ── Whisper STT Service ────────────────────────────────────────────────────
+  # Exposes POST /asr — used by stt_service.py
+  - type: web
+    name: naviora-whisper
+    runtime: docker
+    region: singapore
+    plan: starter
+    dockerfilePath: ./docker/whisper/Dockerfile
+    envVars:
+      - key: ASR_MODEL
+        value: base
+      - key: ASR_ENGINE
+        value: openai_whisper
+    disk:
+      name: whisper-models
+      mountPath: /root/.cache/whisper
+      sizeGB: 5
+
+  # ── Piper TTS Service ──────────────────────────────────────────────────────
+  # Exposes GET /say?text=... — used by tts_service.py
+  - type: web
+    name: naviora-piper
+    runtime: docker
+    region: singapore
+    plan: starter
+    dockerfilePath: ./docker/piper/Dockerfile
+    envVars:
+      - key: PIPER_VOICE
+        value: en_US-lessac-medium
+    disk:
+      name: piper-voices
+      mountPath: /data/voices
+      sizeGB: 2

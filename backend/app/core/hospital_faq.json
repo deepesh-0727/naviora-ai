@@ -1,0 +1,25 @@
+{
+  "visiting_hours": {
+    "general_wards": "9:00 AM to 8:00 PM",
+    "icu": "11:00 AM to 12:00 PM and 5:00 PM to 6:00 PM",
+    "pediatrics": "Open 24 hours for parents"
+  },
+  "departments": {
+    "cardiology": "3rd Floor, Wing A",
+    "orthopedics": "2nd Floor, Wing B",
+    "pediatrics": "4th Floor, Wing C",
+    "emergency": "Ground Floor, Main Entrance",
+    "pharmacy": "Ground Floor, Near Exit, Open 24/7"
+  },
+  "insurance_partners": [
+    "Star Health",
+    "HDFC ERGO",
+    "ICICI Lombard",
+    "Care Health",
+    "Niva Bupa"
+  ],
+  "canteen_timing": "7:00 AM to 10:00 PM",
+  "parking": "Basement 1 and 2, free for patients with valid ID",
+  "ambulance_number": "+91-1234567890",
+  "blood_bank": "1st Floor, Wing D"
+}

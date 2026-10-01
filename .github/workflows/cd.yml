@@ -1,0 +1,86 @@
+name: Naviora AI CD
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # 1. Deploy backend to Render
+  # ─────────────────────────────────────────────────────────────────
+  deploy-backend-render:
+    name: Deploy Backend → Render
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trigger Render Deploy Hook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "⚠️  RENDER_DEPLOY_HOOK secret not set — skipping backend deploy."
+            exit 0
+          fi
+          echo "🚀 Triggering Render deployment..."
+          curl --fail --silent --show-error -X POST "$RENDER_DEPLOY_HOOK"
+          echo "✅ Render deploy hook triggered."
+
+      - name: Wait and verify backend health
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "Skipping health check (no deploy hook configured)."
+            exit 0
+          fi
+          echo "⏳ Waiting 45 s for Render to spin up..."
+          sleep 45
+          curl \
+            --fail \
+            --retry 6 \
+            --retry-delay 15 \
+            --retry-connrefused \
+            https://naviora-backend.onrender.com/api/v1/health \
+            && echo "✅ Backend health check passed." \
+            || echo "⚠️  Backend health check timed out — check Render dashboard."
+
+  # ─────────────────────────────────────────────────────────────────
+  # 2. Deploy admin dashboard to Vercel (depends on backend being up)
+  # ─────────────────────────────────────────────────────────────────
+  deploy-frontend-vercel:
+    name: Deploy Frontend → Vercel
+    runs-on: ubuntu-latest
+    needs: deploy-backend-render   # wait for backend to be healthy first
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Deploy to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "⚠️  VERCEL_TOKEN secret not set — skipping Vercel deployment."
+            exit 0
+          fi
+          echo "🚀 Deploying to Vercel (production)..."
+          vercel deploy \
+            --prod \
+            --token "$VERCEL_TOKEN" \
+            --yes \
+            --cwd frontend
+          echo "✅ Vercel deployment complete."

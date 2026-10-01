@@ -1,0 +1,47 @@
+﻿# Core Framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+python-multipart>=0.0.9
+
+# Database
+sqlalchemy[asyncio]>=2.0.28
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
+alembic>=1.13.1
+greenlet>=3.0.0
+
+# PostGIS
+geoalchemy2>=0.14.6
+shapely>=2.0.4
+
+# Validation & Config
+pydantic[email]>=2.6.4
+pydantic-settings>=2.2.1
+python-dotenv>=1.0.1
+
+# Security & Auth
+python-jose[cryptography]>=3.3.0
+pyjwt>=2.8.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.1.0
+
+# HTTP
+httpx>=0.27.0
+
+# Real-time
+websockets>=12.0
+
+# Cache
+redis>=5.0.3
+
+# AI
+langchain-core>=0.1.30
+
+# Monitoring & Observability
+prometheus-fastapi-instrumentator>=6.1.0
+sentry-sdk>=1.40.0
+slowapi>=0.1.9
+
+# Async Tasks
+celery>=5.3.6
+kombu>=5.3.4
