@@ -106,21 +106,16 @@ async def on_startup():
 async def on_shutdown():
     logger.info("Naviora AI | Safe Clinical Shutdown Initiated")
 
-@app.get("/health", tags=["system"])
-async def health_check():
-    database_status = "connected"
-    try:
-        async with SessionLocal() as db:
-            await db.execute(text("SELECT 1"))
-    except Exception:
-        database_status = "unavailable"
+@app.get("/", tags=["system"])
+async def root():
     return {
-        "status": "online" if database_status == "connected" else "degraded",
-        "orchestrator": "active",
+        "service": "Naviora AI Backend",
+        "status": "online",
         "version": "1.0.0",
-        "telemetry": {
-            "uptime_check": "passed",
-            "db_link": database_status,
-            "ai_node": "reachable"
-        }
+        "docs": "/docs",
+        "health": "/health",
     }
+
+@app.head("/")
+async def root_head():
+    return None
