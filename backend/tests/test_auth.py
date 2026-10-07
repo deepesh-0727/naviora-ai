@@ -114,6 +114,15 @@ async def test_otp_verify_expired_returns_400(client):
 # Login
 # ---------------------------------------------------------------------------
 
+def test_password_hash_round_trip():
+    from app.core.security import get_password_hash, verify_password
+
+    password = "Naviora-Registration-Test-2026!"
+    hashed_password = get_password_hash(password)
+
+    assert verify_password(password, hashed_password)
+
+
 def test_login_missing_credentials_returns_422(client):
     """Empty form body should return 422 Unprocessable Entity."""
     resp = client.post("/api/v1/auth/login", data={})
