@@ -162,9 +162,20 @@ def test_logout_returns_200(client):
     assert "Logged out" in resp.json()["message"]
 
 
-def test_forgot_password_returns_200(client):
+def test_forgot_password_requires_email_delivery_configuration(client, monkeypatch):
+    monkeypatch.setattr("app.api.v1.endpoints.auth.settings.EMAIL_API_KEY", "")
     resp = client.post(
         "/api/v1/auth/forgot-password",
         params={"email": "test@naviora.ai"},
     )
+    assert resp.status_code == 503
+
+
+def test_forgot_password_does_not_disclose_unknown_accounts(client, monkeypatch):
+    monkeypatch.setattr("app.api.v1.endpoints.auth.settings.EMAIL_API_KEY", "test-sendgrid-key")
+    resp = client.post(
+        "/api/v1/auth/forgot-password",
+        params={"email": "unknown@example.invalid"},
+    )
     assert resp.status_code == 200
+    assert resp.json()["message"] == "If that email is registered, a password reset link has been sent."

@@ -1,4 +1,5 @@
 import asyncio
+from html import escape
 import logging
 import httpx
 from typing import Dict, Any, Optional
@@ -64,6 +65,19 @@ class EmailService:
             <p>Invoice Number: <strong>{invoice_number}</strong></p>
             <p>Total Amount: <strong>₹{amount:.2f}</strong></p>
             <p>Thank you for choosing Naviora AI Hospital.</p>
+        </div>
+        """
+        return await self._send(to_email, subject, html)
+
+    async def send_password_reset(self, to_email: str, reset_link: str) -> bool:
+        subject = "Reset your Naviora AI password"
+        safe_link = escape(reset_link, quote=True)
+        html = f"""
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2>Naviora AI password reset</h2>
+            <p>Use the link below to choose a new password. It expires in 15 minutes.</p>
+            <p><a href="{safe_link}">Reset password</a></p>
+            <p>If you did not request this, you can ignore this email.</p>
         </div>
         """
         return await self._send(to_email, subject, html)

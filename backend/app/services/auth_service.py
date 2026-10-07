@@ -1,4 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func
 from sqlalchemy.future import select
 from typing import Optional
 import datetime
@@ -15,14 +16,14 @@ class AuthService:
         return result.scalars().first()
 
     async def get_user_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
-        result = await db.execute(select(User).filter(User.email == email))
+        result = await db.execute(select(User).filter(func.lower(User.email) == email.strip().lower()))
         return result.scalars().first()
 
     async def register_patient(self, db: AsyncSession, user_in: UserRegister) -> User:
         hashed_password = security.get_password_hash(user_in.password)
         db_user = User(
             phone=user_in.phone,
-            email=user_in.email,
+            email=user_in.email.strip().lower(),
             password_hash=hashed_password,
             role="patient",
             is_active=True,
@@ -60,10 +61,12 @@ class AuthService:
 
         return db_user
 
-    async def authenticate_user(self, db: AsyncSession, phone: str, password: str) -> Optional[User]:
-        user = await self.get_user_by_phone(db, phone)
+    async def authenticate_user(self, db: AsyncSession, identifier: str, password: str) -> Optional[User]:
+        user = await self.get_user_by_phone(db, identifier)
         if not user:
-            audit_logger.log_event(action="login_attempt", user_id=phone, resource="auth", status="failed", details={"reason": "phone_not_found"})
+            user = await self.get_user_by_email(db, identifier)
+        if not user:
+            audit_logger.log_event(action="login_attempt", user_id=identifier, resource="auth", status="failed", details={"reason": "identifier_not_found"})
             return None
         if not security.verify_password(password, user.password_hash):
             audit_logger.log_event(action="login_attempt", user_id=str(user.id), resource="auth", status="failed", details={"reason": "wrong_password"})

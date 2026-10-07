@@ -16,6 +16,7 @@ from app.schemas.auth import Token, UserRegister, OTPVerification
 from app.models.user import User
 from app.services.auth_service import auth_service
 from app.services.notification.sms_service import sms_service
+from app.services.notification.email_service import email_service
 from app.api import deps
 
 router = APIRouter()
@@ -82,13 +83,13 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
 @router.post("/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     """
-    Login with phone and password
+    Login with email or phone number and password
     """
     user = await auth_service.authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect phone number or password."
+            detail="Incorrect email/phone number or password."
         )
     
     access_token = security.create_access_token(subject=user.id)
@@ -174,6 +175,9 @@ async def forgot_password(email: str, db: AsyncSession = Depends(get_db)):
     """
     Trigger password reset email
     """
+    if not settings.EMAIL_API_KEY:
+        raise HTTPException(status_code=503, detail="Password reset email is not configured.")
+
     user = await auth_service.get_user_by_email(db, email)
     if not user:
         return {"message": "If that email is registered, a password reset link has been sent."}
@@ -182,8 +186,12 @@ async def forgot_password(email: str, db: AsyncSession = Depends(get_db)):
     redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
     try:
         await redis.set(f"reset_token:{token}", str(user.id), ex=900) # 15 mins
-        # Simulating email sending via SendGrid
-        logger.info(f"Password reset link: https://naviora.ai/reset-password?token={token}")
+        reset_link = f"com.naviora.ai://reset-password?token={token}"
+        if not await email_service.send_password_reset(user.email, reset_link):
+            await redis.delete(f"reset_token:{token}")
+            raise HTTPException(status_code=503, detail="Unable to send a password reset email right now.")
+    except RedisError as exc:
+        raise HTTPException(status_code=503, detail="Password reset service is unavailable.") from exc
     finally:
         await redis.aclose()
     return {"message": "If that email is registered, a password reset link has been sent."}
@@ -191,7 +199,7 @@ async def forgot_password(email: str, db: AsyncSession = Depends(get_db)):
 from pydantic import BaseModel
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str
+    new_password: str = Field(min_length=8, max_length=128)
 
 @router.post("/reset-password")
 async def reset_password(request: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
