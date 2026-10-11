@@ -1,1 +1,1 @@
-export { default } from '../screens/Registration';
+export { default } from '../patient/screens/Registration';

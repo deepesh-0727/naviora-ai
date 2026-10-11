@@ -1,1 +1,1 @@
-export { default } from '../screens/OTP';
+export { default } from '../patient/screens/OTP';

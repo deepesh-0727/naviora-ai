@@ -20,13 +20,13 @@ import { AlertProvider } from './src/context/AlertContext';
 import { LanguageProvider } from './src/context/LanguageContext';
 import { RoleProvider } from './src/shared/contexts/RoleContext';
 import { GlobalAlert } from './src/components/common/GlobalAlert';
-import SplashScreen from './src/screens/Splash';
+import SplashScreen from './src/patient/screens/Splash';
 import RoleSelectScreen from './src/screens/RoleSelect';
-import LoginScreen from './src/screens/Login';
+import LoginScreen from './src/patient/screens/Login';
 import ForgotPasswordScreen from './src/screens/ForgotPassword';
 import ResetPasswordScreen from './src/screens/ResetPassword';
-import OTPScreen from './src/screens/OTP';
-import RegistrationScreen from './src/screens/Registration';
+import OTPScreen from './src/patient/screens/OTP';
+import RegistrationScreen from './src/patient/screens/Registration';
 import RoleBasedNavigator from './src/navigation/RoleBasedNavigator';
 
 const Stack = createStackNavigator();
