@@ -30,8 +30,8 @@ export const Button = ({
   </TouchableOpacity>
 );
 
-export const Card = ({ children, style }: { children: React.ReactNode; style?: ViewStyle }) => (
-  <View style={[styles.card, style]}>{children}</View>
+export const Card = ({ children, style }: { children: React.ReactNode; style?: ViewStyle | (ViewStyle | false | undefined)[] }) => (
+  <View style={[styles.card, style as ViewStyle]}>{children}</View>
 );
 
 export const Input = ({

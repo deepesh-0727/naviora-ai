@@ -13,10 +13,10 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 // Screens – resolved lazily after Batch 2 & 3 move/create them
 // For now we forward-reference them from ../../screens (old location)
 // Batch 2 will create patient/screens copies; imports updated there.
-import DashboardScreen from '../../screens/Dashboard';
-import AppointmentScreen from '../../screens/Appointment';
+import DashboardScreen from '../screens/Dashboard';
+import AppointmentScreen from '../screens/Appointment';
 import VoiceAssistantScreen from '../../screens/VoiceAssistant';
-import NotificationsScreen from '../../screens/Notifications';
+import NotificationsScreen from '../screens/Notifications';
 import ProfileScreen from '../../screens/Profile';
 import NavigationScreen from '../../screens/Navigation';
 import EmergencyScreen from '../../screens/Emergency';

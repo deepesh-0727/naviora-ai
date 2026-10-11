@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import AppointmentScreen from '../../screens/Appointment';
+import AppointmentScreen from '../screens/Appointment';
 
 export type AppointmentStackParamList = {
   AppointmentList: undefined;
