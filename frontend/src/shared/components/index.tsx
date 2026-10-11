@@ -72,9 +72,10 @@ export const EmptyState = ({ message = 'No data available.' }: { message?: strin
   </View>
 );
 
-export const ErrorState = ({ message = 'There was an error.' }: { message?: string }) => (
+export const ErrorState = ({ message = 'There was an error.', onRetry }: { message?: string; onRetry?: () => void }) => (
   <View style={styles.centered}>
     <Text style={styles.error}>{message}</Text>
+    {onRetry ? <Button title="Retry" variant="secondary" onPress={onRetry} style={{ marginTop: 12 }} /> : null}
   </View>
 );
 
@@ -128,6 +129,22 @@ export const ScreenContainer = ({ children, style }: { children: React.ReactNode
 
 export const SectionHeader = ({ title }: { title: string }) => <Text style={styles.header}>{title}</Text>;
 
+export const BackendNotAvailable = ({ endpoint }: { endpoint: string }) => (
+  <View style={styles.centered}>
+    <Text style={styles.unavailableIcon}>🔌</Text>
+    <Text style={styles.unavailableTitle}>Endpoint Not Available</Text>
+    <Text style={styles.unavailableEndpoint}>{endpoint}</Text>
+    <Text style={styles.muted}>The backend endpoint has not been implemented yet.</Text>
+  </View>
+);
+
+export const InfoRow = ({ label, value }: { label: string; value?: string | null }) => (
+  <View style={styles.infoRow}>
+    <Text style={styles.infoLabel}>{label}</Text>
+    <Text style={styles.infoValue}>{value ?? '—'}</Text>
+  </View>
+);
+
 const styles = StyleSheet.create({
   button: { backgroundColor: '#1D8A6C', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 18, alignItems: 'center' },
   secondary: { backgroundColor: '#EAF9F3' },
@@ -158,6 +175,12 @@ const styles = StyleSheet.create({
   avatarText: { color: '#1D8A6C', fontWeight: '700' },
   screenContainer: { flex: 1, backgroundColor: '#F7F9FC', padding: 16 },
   header: { fontSize: 18, fontWeight: '700', color: '#1C1F24', marginBottom: 12 },
+  unavailableIcon: { fontSize: 36, marginBottom: 8 },
+  unavailableTitle: { fontSize: 16, fontWeight: '700', color: '#1C1F24', marginBottom: 4 },
+  unavailableEndpoint: { fontSize: 12, color: '#8899AA', fontFamily: 'monospace', marginBottom: 4 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderColor: '#E5EAF0' },
+  infoLabel: { fontSize: 14, color: '#5F6975', flex: 1 },
+  infoValue: { fontSize: 14, fontWeight: '600', color: '#1C1F24', flex: 2, textAlign: 'right' },
 });
 
 export default {
@@ -175,4 +198,6 @@ export default {
   Avatar,
   ScreenContainer,
   SectionHeader,
+  BackendNotAvailable,
+  InfoRow,
 };
