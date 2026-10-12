@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, TouchableOpacity, SafeAreaView, Dimensions, ScrollView, TextInput, ActivityIndicator } from 'react-native';
+import { Alert, StyleSheet, View, TouchableOpacity, SafeAreaView, Dimensions, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,21 +17,77 @@ export default function NavigationScreen({ navigation }: any) {
   const [activeFloor, setActiveFloor] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState<any | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    apiService.get<any>('/navigation/departments').then(res => {
-      setLoading(false);
-      if (res.data) {
-        setDepartments(Array.isArray(res.data) ? res.data : (res.data.departments || []));
+    let isMounted = true;
+    const loadDepartments = async () => {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const result = await apiService.get<any>('/navigation/departments');
+        if (!result.data) {
+          throw new Error(result.error || 'Unable to load hospital departments.');
+        }
+        if (isMounted) {
+          setDepartments(Array.isArray(result.data) ? result.data : (result.data.departments || []));
+        }
+      } catch (error) {
+        if (isMounted) {
+          setLoadError(error instanceof Error ? error.message : 'Unable to load hospital departments.');
+        }
+      } finally {
+        if (isMounted) setLoading(false);
       }
-    }).catch(() => setLoading(false));
+    };
+    loadDepartments();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const filteredDepartments = departments.filter((d: any) =>
     (d.name || d.department_name || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const startNavigation = async () => {
+    if (!selectedDepartment) {
+      Alert.alert('Choose a destination', 'Select a department before starting navigation.');
+      return;
+    }
+
+    const name = String(selectedDepartment.name || selectedDepartment.department_name || '').toLowerCase();
+    const destinationNode = name.includes('pharmacy') ? 'G_PHARMACY'
+      : name.includes('cardiology') ? 'F1_CARDIOLOGY'
+        : name.includes('intensive care') || name === 'icu' ? 'F1_ICU'
+          : name.includes('nurse station') ? 'F1_NURSE_STATION'
+            : name.includes('reception') ? 'G_RECEPTION'
+              : name.includes('canteen') || name.includes('cafeteria') ? 'G_CANTEEN'
+                : null;
+
+    if (!destinationNode) {
+      Alert.alert('Directions unavailable', 'Indoor directions are not configured for this department yet.');
+      return;
+    }
+
+    setRouteLoading(true);
+    try {
+      const result = await apiService.post<any>(
+        `/navigation/route?start_node=G_ENTRANCE&end_node=${encodeURIComponent(destinationNode)}`
+      , {});
+      if (!result.data || result.data.error || !Array.isArray(result.data.human_readable)) {
+        throw new Error(result.error || result.data?.error || 'No route is available to this destination.');
+      }
+      Alert.alert('Directions', result.data.human_readable.join('\n'));
+    } catch (error) {
+      Alert.alert('Unable to start navigation', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setRouteLoading(false);
+    }
+  };
 
   const FloorBtn = ({ floor }: { floor: any }) => (
     <TouchableOpacity
@@ -45,8 +101,16 @@ export default function NavigationScreen({ navigation }: any) {
     </TouchableOpacity>
   );
 
-  const DestinationItem = ({ name, icon, floor, color }: any) => (
-    <TouchableOpacity style={styles.destItem}>
+  const DestinationItem = ({ department, name, icon, floor, color }: any) => (
+    <TouchableOpacity
+      onPress={() => setSelectedDepartment(department)}
+      accessibilityRole="button"
+      accessibilityState={{ selected: selectedDepartment?.id === department.id }}
+      style={[
+        styles.destItem,
+        selectedDepartment?.id === department.id && { backgroundColor: theme.colors.primaryLight, borderRadius: 12 },
+      ]}
+    >
       <View style={[styles.destIcon, { backgroundColor: color + '20' }]}>
         <Ionicons name={icon || "medical"} size={24} color={color} />
       </View>
@@ -125,12 +189,17 @@ export default function NavigationScreen({ navigation }: any) {
           <NavioraText type="label" color="low" style={styles.sectionTitle}>DEPARTMENTS & DESTINATIONS</NavioraText>
           {loading ? (
             <ActivityIndicator color={theme.colors.primary} size="large" style={{ marginVertical: 20 }} />
+          ) : loadError ? (
+            <GlassCard style={{ padding: 16 }}>
+              <NavioraText type="body" color="error" style={{ textAlign: 'center' }}>{loadError}</NavioraText>
+            </GlassCard>
           ) : filteredDepartments.length > 0 ? (
             <GlassCard style={{ padding: 8 }}>
               {filteredDepartments.map((dept, index) => (
                 <React.Fragment key={dept.id || index}>
                   {index > 0 && <View style={styles.divider} />}
                   <DestinationItem
+                    department={dept}
                     name={dept.name || dept.department_name}
                     icon={dept.icon || "medical"}
                     floor={dept.floor || 1}
@@ -142,12 +211,18 @@ export default function NavigationScreen({ navigation }: any) {
           ) : (
             <GlassCard style={{ padding: 16 }}>
               <NavioraText type="body" color="low" style={{ textAlign: 'center' }}>
-                No departments found.
+                {searchQuery ? 'No matching departments found.' : 'No departments are available.'}
               </NavioraText>
             </GlassCard>
           )}
 
-          <GradientButton title="Start Navigation" style={{ marginTop: 32 }} />
+          <GradientButton
+            title={routeLoading ? 'Finding Route...' : 'Start Navigation'}
+            onPress={startNavigation}
+            loading={routeLoading}
+            disabled={routeLoading}
+            style={{ marginTop: 32 }}
+          />
           <View style={{ height: 100 }} />
         </ScrollView>
       </SafeAreaView>

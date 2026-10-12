@@ -1,9 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// 🏥 Production WebSocket Orchestration
-// Auto-detects environment: use 10.0.2.2 for Android Emulator, localhost for iOS
-const WS_URL = 'ws://10.0.2.2:8000/api/v1/stream';
+import { CONFIG } from '../../config';
 
 export const useWebSocket = () => {
   const [isConnected, setIsConnected] = useState(false);
@@ -11,10 +8,10 @@ export const useWebSocket = () => {
   const ws = useRef<WebSocket | null>(null);
 
   const connect = useCallback(async () => {
-    const token = await AsyncStorage.getItem('userToken');
+    const token = await AsyncStorage.getItem('access_token');
     if (!token) return;
 
-    ws.current = new WebSocket(`${WS_URL}?token=${token}`);
+    ws.current = new WebSocket(`${CONFIG.WS_BASE_URL}?token=${encodeURIComponent(token)}`);
 
     ws.current.onopen = () => {
       console.log('WebSocket Connected');

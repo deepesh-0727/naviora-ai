@@ -98,7 +98,7 @@ jobs:
 
       - name: Expo web export (build check)
         env:
-          EXPO_PUBLIC_API_URL: "https://naviora-backend.onrender.com"
+          EXPO_PUBLIC_API_URL: "https://naviora-backend-s6je.onrender.com"
           EXPO_PUBLIC_ENV: "production"
         run: |
           cd frontend

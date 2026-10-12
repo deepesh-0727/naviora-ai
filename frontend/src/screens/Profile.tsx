@@ -108,7 +108,6 @@ export default function ProfileScreen({ navigation }: any) {
 
   const handleSignOut = async () => {
     await signOut();
-    navigation.replace('Login');
   };
 
   const ProfileSection = ({ title, children }: any) => (

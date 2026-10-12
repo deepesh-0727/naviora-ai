@@ -1,7 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Replace with your local FastAPI server IP address when debugging on physical devices
-const WS_URL = 'wss://naviora-backend-s6je.onrender.com/api/v1/stream';
+import { CONFIG } from '../../config';
 
 type WebSocketMessage = {
   action: string;
@@ -27,7 +25,7 @@ class WebSocketClient {
       return;
     }
 
-    const url = `${WS_URL}?token=${encodeURIComponent(token)}`;
+    const url = `${CONFIG.WS_BASE_URL}?token=${encodeURIComponent(token)}`;
     this.socket = new WebSocket(url);
 
     this.socket.onopen = () => {

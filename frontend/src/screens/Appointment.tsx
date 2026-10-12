@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, RefreshControl, Image, Dimensions } from 'react-native';
+import { Alert, Modal, StyleSheet, View, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, RefreshControl, Image, Dimensions, TextInput } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,29 +28,101 @@ export default function AppointmentScreen({ navigation }: any) {
   const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [rescheduleTarget, setRescheduleTarget] = useState<AppointmentItem | null>(null);
+  const [newDateTime, setNewDateTime] = useState('');
+  const [savingReschedule, setSavingReschedule] = useState(false);
 
   const fetchAppointments = useCallback(async () => {
     const result = await apiService.get<AppointmentItem[]>('/appointments');
-    if (result.data) {
-      setAppointments(Array.isArray(result.data) ? result.data : []);
+    if (!result.data) {
+      throw new Error(result.error || 'Unable to load appointments.');
     }
+    setAppointments(Array.isArray(result.data) ? result.data : []);
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
     setLoading(true);
-    fetchAppointments().finally(() => setLoading(false));
+    fetchAppointments()
+      .catch(error => Alert.alert('Appointments unavailable', error instanceof Error ? error.message : 'Unable to load appointments.'))
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, [fetchAppointments]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchAppointments();
-    setRefreshing(false);
+    try {
+      await fetchAppointments();
+    } catch (error) {
+      Alert.alert('Refresh failed', error instanceof Error ? error.message : 'Unable to refresh appointments.');
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const cancelAppointment = async (id: number) => {
-    const result = await apiService.delete(`/appointments/${id}`);
-    if (result.status >= 200 && result.status < 300) {
+    try {
+      const result = await apiService.delete(`/appointments/${id}`);
+      if (result.error || !result.data) {
+        throw new Error(result.error || 'Unable to cancel this appointment.');
+      }
       setAppointments(current => current.map(item => item.id === id ? { ...item, status: 'cancelled' } : item));
+      Alert.alert('Appointment canceled', 'Your appointment has been canceled.');
+    } catch (error) {
+      Alert.alert('Cancellation failed', error instanceof Error ? error.message : 'Unable to cancel this appointment.');
+    }
+  };
+
+  const confirmCancelAppointment = (appointment: AppointmentItem) => {
+    Alert.alert(
+      'Cancel appointment?',
+      `Cancel your appointment with ${appointment.doctor_name}?`,
+      [
+        { text: 'Keep appointment', style: 'cancel' },
+        { text: 'Cancel appointment', style: 'destructive', onPress: () => cancelAppointment(appointment.id) },
+      ]
+    );
+  };
+
+  const openReschedule = (appointment: AppointmentItem) => {
+    const date = new Date(appointment.scheduled_time);
+    const pad = (value: number) => String(value).padStart(2, '0');
+    setNewDateTime(Number.isNaN(date.getTime())
+      ? ''
+      : `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`);
+    setRescheduleTarget(appointment);
+  };
+
+  const saveReschedule = async () => {
+    if (!rescheduleTarget) return;
+    const parsedDate = new Date(newDateTime.trim().replace(' ', 'T'));
+    if (Number.isNaN(parsedDate.getTime()) || parsedDate.getTime() <= Date.now()) {
+      Alert.alert('Invalid date and time', 'Enter a future date and time using YYYY-MM-DD HH:mm.');
+      return;
+    }
+
+    setSavingReschedule(true);
+    try {
+      const scheduledTime = parsedDate.toISOString();
+      const result = await apiService.put<{ message: string }>(`/appointments/${rescheduleTarget.id}`, {
+        scheduled_time: scheduledTime,
+      });
+      if (result.error || !result.data) {
+        throw new Error(result.error || 'Unable to reschedule this appointment.');
+      }
+      setAppointments(current => current.map(item =>
+        item.id === rescheduleTarget.id ? { ...item, scheduled_time: scheduledTime } : item
+      ));
+      setRescheduleTarget(null);
+      Alert.alert('Appointment rescheduled', 'Your new appointment time has been saved.');
+    } catch (error) {
+      Alert.alert('Rescheduling failed', error instanceof Error ? error.message : 'Unable to reschedule this appointment.');
+    } finally {
+      setSavingReschedule(false);
     }
   };
 
@@ -93,10 +165,10 @@ export default function AppointmentScreen({ navigation }: any) {
         </View>
 
         <View style={styles.actionRow}>
-          <TouchableOpacity style={[styles.actionBtn, { borderColor: theme.colors.glass.border }]}>
+          <TouchableOpacity style={[styles.actionBtn, { borderColor: theme.colors.glass.border }]} onPress={() => openReschedule(item)} disabled={item.status !== 'scheduled'}>
             <NavioraText type="xs" color="low">Reschedule</NavioraText>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { borderColor: theme.colors.glass.border }]} onPress={() => cancelAppointment(item.id)} disabled={item.status === 'cancelled'}>
+          <TouchableOpacity style={[styles.actionBtn, { borderColor: theme.colors.glass.border }]} onPress={() => confirmCancelAppointment(item)} disabled={item.status !== 'scheduled'}>
             <NavioraText type="xs" color="error">Cancel</NavioraText>
           </TouchableOpacity>
         </View>
@@ -153,6 +225,37 @@ export default function AppointmentScreen({ navigation }: any) {
           </LinearGradient>
         </TouchableOpacity>
       </SafeAreaView>
+
+      <Modal visible={rescheduleTarget !== null} transparent animationType="slide" onRequestClose={() => setRescheduleTarget(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: theme.colors.surface }]}>
+            <NavioraText type="h3">Reschedule appointment</NavioraText>
+            <NavioraText type="xs" color="low" style={{ marginTop: 8 }}>
+              Enter a future date and time (YYYY-MM-DD HH:mm).
+            </NavioraText>
+            <TextInput
+              value={newDateTime}
+              onChangeText={setNewDateTime}
+              placeholder="2026-12-31 14:30"
+              placeholderTextColor={theme.colors.text.low}
+              accessibilityLabel="New appointment date and time"
+              style={[styles.dateTimeInput, { color: theme.colors.text.high, borderColor: theme.colors.border }]}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity onPress={() => setRescheduleTarget(null)} disabled={savingReschedule} style={styles.modalAction}>
+                <NavioraText type="label" color="low">Back</NavioraText>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={saveReschedule} disabled={savingReschedule} style={styles.modalAction}>
+                {savingReschedule
+                  ? <ActivityIndicator color={theme.colors.primary} />
+                  : <NavioraText type="label" color="primary">Save time</NavioraText>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -176,4 +279,9 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', marginTop: 60, paddingHorizontal: 40 },
   fab: { position: 'absolute', bottom: 100, right: 24, width: 64, height: 64, borderRadius: 32, elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
   fabGradient: { flex: 1, borderRadius: 32, justifyContent: 'center', alignItems: 'center' },
+  modalOverlay: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.55)' },
+  modalCard: { padding: 24, borderRadius: 20 },
+  dateTimeInput: { borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 20, fontSize: 16 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 20, gap: 24 },
+  modalAction: { minWidth: 64, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
 });

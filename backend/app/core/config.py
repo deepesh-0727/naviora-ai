@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     # =========================================================
     ALLOWED_HOSTS: List[str] = [
         "naviora-backend.onrender.com",
+        "naviora-backend-s6je.onrender.com",
         "naviora-api.onrender.com",
         "localhost",
         "127.0.0.1",

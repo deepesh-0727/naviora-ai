@@ -20,7 +20,6 @@ import { useQueue } from '../context/QueueContext';
 import { useProfile } from '../context/ProfileContext';
 import { NavioraText, GlassCard, StatusBadge } from '../components/common/AtomicComponents';
 import { apiService } from '../services/api';
-import CONFIG from '../../config';
 
 const { width } = Dimensions.get('window');
 
@@ -64,31 +63,8 @@ export default function DashboardScreen({ navigation }: any) {
 
     fetchData();
 
-    let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket(`${CONFIG.WS_BASE_URL}/queue`);
-      ws.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          if (payload.position && isMounted) {
-            setQueueData({
-              position: payload.position,
-              estimatedWait: payload.estimated_wait || 15,
-              status: payload.status || 'in_progress',
-              doctorName: payload.doctor_name || 'Attending Doctor'
-            });
-          }
-        } catch (e) {
-          // Parse error silent fallback
-        }
-      };
-    } catch (e) {
-      // WS connection fallback
-    }
-
     return () => {
       isMounted = false;
-      if (ws) ws.close();
     };
   }, []);
 

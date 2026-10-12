@@ -227,19 +227,9 @@ function AdminTabs() {
   );
 }
 
-// ─── Role-Based Stack Navigator ───────────────────────────────────────────────
-export default function RoleBasedNavigator() {
-  const { user } = useAuth();
-  const role = user?.role ?? 'patient';
-
-  const initialRoute =
-    role === 'doctor' ? 'DoctorMain' :
-    role === 'nurse'  ? 'NurseMain'  :
-    role === 'admin'  ? 'AdminMain'  : 'PatientMain';
-
+function PatientZone() {
   return (
-    <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
-      {/* Patient Stack */}
+    <Stack.Navigator initialRouteName="PatientMain" screenOptions={{ headerShown: false }}>
       <Stack.Screen name="PatientMain" component={PatientTabs} />
       <Stack.Screen name="Navigation" component={NavigationScreen} />
       <Stack.Screen name="Emergency" component={EmergencyScreen} />
@@ -248,23 +238,55 @@ export default function RoleBasedNavigator() {
       <Stack.Screen name="Telehealth" component={TelehealthScreen} />
       <Stack.Screen name="Pharmacy" component={PharmacyScreen} />
       <Stack.Screen name="Billing" component={BillingScreen} />
+    </Stack.Navigator>
+  );
+}
 
-      {/* Doctor Stack */}
+function DoctorZone() {
+  return (
+    <Stack.Navigator initialRouteName="DoctorMain" screenOptions={{ headerShown: false }}>
       <Stack.Screen name="DoctorMain" component={DoctorTabs} />
       <Stack.Screen name="PatientDetails" component={PatientDetailsScreen} />
       <Stack.Screen name="WritePrescription" component={PrescriptionScreen} />
       <Stack.Screen name="DoctorEmergency" component={DoctorEmergencyScreen} />
+    </Stack.Navigator>
+  );
+}
 
-      {/* Nurse Stack */}
+function NurseZone() {
+  return (
+    <Stack.Navigator initialRouteName="NurseMain" screenOptions={{ headerShown: false }}>
       <Stack.Screen name="NurseMain" component={NurseTabs} />
       <Stack.Screen name="NurseEmergency" component={NurseEmergencyScreen} />
+    </Stack.Navigator>
+  );
+}
 
-      {/* Admin Stack */}
+function AdminZone() {
+  return (
+    <Stack.Navigator initialRouteName="AdminMain" screenOptions={{ headerShown: false }}>
       <Stack.Screen name="AdminMain" component={AdminTabs} />
       <Stack.Screen name="Inventory" component={InventoryScreen} />
       <Stack.Screen name="AuditLogs" component={AuditLogsScreen} />
     </Stack.Navigator>
   );
+}
+
+export default function RoleBasedNavigator() {
+  const { user } = useAuth();
+
+  switch (user?.role) {
+    case 'doctor':
+      return <DoctorZone />;
+    case 'nurse':
+    case 'staff':
+      return <NurseZone />;
+    case 'admin':
+      return <AdminZone />;
+    case 'patient':
+    default:
+      return <PatientZone />;
+  }
 }
 
 const styles = StyleSheet.create({

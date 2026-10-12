@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
 import {
   FloatingLabelInput,
   NavioraButton,
@@ -20,7 +20,7 @@ interface AccountProfile {
 
 export default function NurseProfileScreen() {
   const theme = useTheme();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, signOut } = useAuth();
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [phone, setPhone] = useState(user?.phone || '');
   const [loading, setLoading] = useState(true);
@@ -74,6 +74,13 @@ export default function NurseProfileScreen() {
     }
   };
 
+  const confirmSignOut = () => {
+    Alert.alert('Sign out?', 'You will need to sign in again to access your account.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    ]);
+  };
+
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.colors.background }]}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -102,6 +109,7 @@ export default function NurseProfileScreen() {
             )}
           </NavioraCard>
         ) : null}
+        <NavioraButton title="Sign out" variant="secondary" onPress={confirmSignOut} style={styles.signOutButton} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -117,4 +125,5 @@ const styles = StyleSheet.create({
   form: { marginTop: 16 },
   editButton: { marginTop: 16 },
   cancelButton: { marginTop: 10 },
+  signOutButton: { marginTop: 24 },
 });

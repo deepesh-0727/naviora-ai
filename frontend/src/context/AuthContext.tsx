@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '../services/api';
 
 export type UserRole = 'patient' | 'doctor' | 'nurse' | 'staff' | 'admin';
+export type LoginZone = 'patient' | 'staff' | 'admin';
 
 export interface AuthUser {
   id: string;
@@ -20,7 +21,7 @@ interface AuthContextType {
   signIn: (user: AuthUser) => Promise<void>;
   signOut: () => Promise<void>;
   updateUser: (updates: Partial<AuthUser>) => Promise<void>;
-  loginWithCredentials: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithCredentials: (identifier: string, password: string, zone?: LoginZone) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -44,15 +45,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => setIsLoading(false));
   }, []);
 
-  const loginWithCredentials = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const loginWithCredentials = async (
+    identifier: string,
+    password: string,
+    zone: LoginZone = 'patient'
+  ): Promise<{ success: boolean; error?: string }> => {
     // Use OAuth2 form-encoded login (FastAPI standard)
     const result = await apiService.postForm<{ access_token: string; refresh_token: string; token_type: string }>(
       '/auth/login',
-      { username: email.trim().toLowerCase(), password }
+      { username: identifier.trim(), password }
     );
 
     if (!result.data?.access_token) {
-      return { success: false, error: result.error || 'Invalid email or password.' };
+      return { success: false, error: result.error || 'Incorrect email/phone number or password.' };
     }
 
     // Store tokens
@@ -66,14 +71,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const userData = meRes.data || profileRes.data;
     if (!userData) {
+      await AsyncStorage.multiRemove(['access_token', 'refresh_token']);
       return { success: false, error: 'Failed to load user profile.' };
+    }
+
+    const role = normalizeRole(userData.role);
+    const roleMatchesZone = zone === 'patient'
+      ? role === 'patient'
+      : zone === 'admin'
+        ? role === 'admin'
+        : role === 'doctor' || role === 'nurse' || role === 'staff';
+    if (!role || !roleMatchesZone) {
+      await AsyncStorage.multiRemove(['access_token', 'refresh_token']);
+      return {
+        success: false,
+        error: 'This account does not match the selected sign-in type. Choose the correct account type and try again.',
+      };
     }
 
     const authUser: AuthUser = {
       id: String(userData.id || userData.user_id),
-      name: userData.full_name || userData.name || `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || email,
-      email: userData.email || email,
-      role: normalizeRole(userData.role),
+      name: userData.full_name || userData.name || `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || identifier,
+      email: userData.email || identifier,
+      role,
       phone: userData.phone,
       avatar: userData.avatar_url,
       token: result.data.access_token,
@@ -107,11 +127,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-function normalizeRole(role: unknown): UserRole {
+function normalizeRole(role: unknown): UserRole | null {
   if (role === 'doctor' || role === 'nurse' || role === 'staff' || role === 'admin') {
     return role;
   }
-  return 'patient';
+  if (role === 'patient') return 'patient';
+  return null;
 }
 
 export const useAuth = () => useContext(AuthContext);

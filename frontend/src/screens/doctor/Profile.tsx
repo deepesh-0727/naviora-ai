@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
 import {
   FloatingLabelInput,
   NavioraButton,
@@ -25,7 +25,7 @@ interface DoctorProfile {
 
 export default function DoctorProfileScreen() {
   const theme = useTheme();
-  const { updateUser } = useAuth();
+  const { updateUser, signOut } = useAuth();
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [draft, setDraft] = useState<DoctorProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,6 +92,13 @@ export default function DoctorProfileScreen() {
     }
   };
 
+  const confirmSignOut = () => {
+    Alert.alert('Sign out?', 'You will need to sign in again to access your account.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    ]);
+  };
+
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.colors.background }]}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -130,6 +137,7 @@ export default function DoctorProfileScreen() {
             )}
           </NavioraCard>
         ) : null}
+        <NavioraButton title="Sign out" variant="secondary" onPress={confirmSignOut} style={styles.signOutButton} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -146,4 +154,5 @@ const styles = StyleSheet.create({
   availabilityRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 14 },
   editButton: { marginTop: 16 },
   cancelButton: { marginTop: 10 },
+  signOutButton: { marginTop: 24 },
 });

@@ -42,7 +42,7 @@ jobs:
             --retry 6 \
             --retry-delay 15 \
             --retry-connrefused \
-            https://naviora-backend.onrender.com/api/v1/health \
+            https://naviora-backend-s6je.onrender.com/health \
             && echo "✅ Backend health check passed." \
             || echo "⚠️  Backend health check timed out — check Render dashboard."
 

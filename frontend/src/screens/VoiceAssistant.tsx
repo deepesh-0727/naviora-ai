@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
+import * as Speech from 'expo-speech';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 
@@ -11,6 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useAlert } from '../context/AlertContext';
 import { NavioraText, GlassCard, PulseAnimation } from '../components/common/AtomicComponents';
+import { apiService } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -49,20 +51,27 @@ export default function VoiceAssistantScreen({ navigation }: any) {
       setStatus('RESPONDING');
       setTranscript(lastMessage.query);
       setAiResponse(lastMessage.response_text);
+    } else if (lastMessage?.type === 'error') {
+      setStatus('IDLE');
+      showAlert(lastMessage.message || 'Voice request failed.', 'error');
     }
-  }, [lastMessage]);
+  }, [lastMessage, showAlert]);
 
   async function startRecording() {
     try {
-      await Audio.requestPermissionsAsync();
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        showAlert('Microphone permission is required to use voice input.', 'error');
+        return;
+      }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       setRecording(recording);
       setStatus('LISTENING');
       setTranscript('');
       setAiResponse('');
-    } catch (err) {
-      showAlert('Failed to start audio recording', 'error');
+    } catch (error) {
+      showAlert(error instanceof Error ? error.message : 'Failed to start audio recording.', 'error');
     }
   }
 
@@ -70,12 +79,46 @@ export default function VoiceAssistantScreen({ navigation }: any) {
     if (!recording) return;
     setStatus('PROCESSING');
     setRecording(null);
-    await recording.stopAndUnloadAsync();
-    const uri = recording.getURI();
-    if (uri) {
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      if (!uri) {
+        throw new Error('The audio recording could not be read.');
+      }
       const base64Audio = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
       sendMessage({ action: 'process_voice', audio: base64Audio });
+    } catch (error) {
+      setStatus('IDLE');
+      showAlert(error instanceof Error ? error.message : 'Failed to process audio recording.', 'error');
     }
+  }
+
+  async function sendSuggestedQuery(text: string) {
+    setStatus('PROCESSING');
+    setTranscript(text);
+    setAiResponse('');
+    try {
+      const result = await apiService.post<{ response_text: string }>(
+        '/voice/process-text?return_audio=false',
+        { text }
+      );
+      if (!result.data?.response_text) {
+        throw new Error(result.error || 'The assistant did not return a response.');
+      }
+      setAiResponse(result.data.response_text);
+      setStatus('RESPONDING');
+    } catch (error) {
+      setStatus('IDLE');
+      showAlert(error instanceof Error ? error.message : 'Unable to contact the voice assistant.', 'error');
+    }
+  }
+
+  function speakResponse() {
+    if (!aiResponse) return;
+    Speech.stop();
+    Speech.speak(aiResponse, {
+      onError: () => showAlert('Unable to play the voice response.', 'error'),
+    });
   }
 
   const WaveBar = ({ index }: { index: number }) => {
@@ -85,8 +128,8 @@ export default function VoiceAssistantScreen({ navigation }: any) {
     return <Animated.View style={[styles.waveBar, animatedStyle, { backgroundColor: theme.colors.primary }]} />;
   };
 
-  const Chip = ({ label, icon }: { label: string; icon: any }) => (
-    <TouchableOpacity style={[styles.chip, { backgroundColor: theme.colors.glass.bg, borderColor: theme.colors.glass.border }]}>
+  const Chip = ({ label, icon, onPress }: { label: string; icon: any; onPress: () => void }) => (
+    <TouchableOpacity onPress={onPress} style={[styles.chip, { backgroundColor: theme.colors.glass.bg, borderColor: theme.colors.glass.border }]}>
       <Ionicons name={icon} size={16} color={theme.colors.primary} />
       <NavioraText type="label" style={{ marginLeft: 8 }}>{label}</NavioraText>
     </TouchableOpacity>
@@ -107,7 +150,7 @@ export default function VoiceAssistantScreen({ navigation }: any) {
               <NavioraText type="xs" color="low">{isConnected ? 'ONLINE' : 'OFFLINE'}</NavioraText>
             </View>
           </View>
-          <TouchableOpacity style={styles.backBtn}>
+          <TouchableOpacity style={styles.backBtn} onPress={speakResponse} disabled={!aiResponse} accessibilityLabel="Play assistant response">
             <Ionicons name="volume-medium-outline" size={24} color="#FFF" />
           </TouchableOpacity>
         </View>
@@ -123,9 +166,9 @@ export default function VoiceAssistantScreen({ navigation }: any) {
             <View style={styles.emptyContainer}>
               <NavioraText type="h2" align="center" color="medium">How can I help you today?</NavioraText>
               <View style={styles.chipRow}>
-                <Chip label="Book Appointment" icon="calendar" />
-                <Chip label="Check Queue" icon="people" />
-                <Chip label="Emergency" icon="alert-circle" />
+                <Chip label="Book Appointment" icon="calendar" onPress={() => sendSuggestedQuery('How can I book an appointment?')} />
+                <Chip label="Check Queue" icon="people" onPress={() => sendSuggestedQuery('Check my queue status.')} />
+                <Chip label="Emergency" icon="alert-circle" onPress={() => navigation.navigate('Emergency')} />
               </View>
             </View>
           )}

@@ -16,6 +16,9 @@ export const saveTokens = async (accessToken: string, refreshToken?: string): Pr
 export const getAccessToken = async (): Promise<string | null> =>
   SecureStore.getItemAsync(keys.accessToken);
 
+export const saveAccessToken = async (accessToken: string): Promise<void> =>
+  SecureStore.setItemAsync(keys.accessToken, accessToken);
+
 export const getRefreshToken = async (): Promise<string | null> =>
   SecureStore.getItemAsync(keys.refreshToken);
 

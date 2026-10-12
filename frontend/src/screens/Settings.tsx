@@ -5,12 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { NavioraText, GlassCard, GradientButton } from '../components/common/AtomicComponents';
 import { useLanguage, Language } from '../context/LanguageContext';
 
 export default function SettingsScreen({ navigation }: any) {
   const theme = useTheme();
+  const { signOut } = useAuth();
   const { language, setLanguage } = useLanguage();
   const [voiceGuidance, setVoiceGuidance] = useState(true);
   const [largeText, setLargeText] = useState(false);
@@ -44,9 +46,7 @@ export default function SettingsScreen({ navigation }: any) {
           text: "Logout", 
           style: "destructive",
           onPress: async () => {
-            await AsyncStorage.removeItem('access_token');
-            // Navigate to Auth or Login
-            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+            await signOut();
           }
         }
       ]
@@ -127,7 +127,12 @@ export default function SettingsScreen({ navigation }: any) {
 
           <NavioraText type="label" color="low" style={styles.sectionTitle}>ACCOUNT & SECURITY</NavioraText>
           <GlassCard style={{ padding: 8, marginBottom: 32 }}>
-            <SettingRow label="Account Details" icon="person" color={theme.colors.primary} />
+            <SettingRow
+              label="Account Details"
+              icon="person"
+              color={theme.colors.primary}
+              onPress={() => navigation.navigate('PatientMain', { screen: 'Account' })}
+            />
             <SettingRow label="Biometric Access" icon="finger-print" type="switch" value={true} />
             <SettingRow label="Download Records" icon="cloud-download" color={theme.colors.primary} isLast />
           </GlassCard>

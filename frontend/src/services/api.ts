@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CONFIG } from '../../config';
-const BASE_URL = 'https://naviora-backend-s6je.onrender.com/api/v1';
 
 export interface APIResponse<T> {
   data?: T;
@@ -8,12 +7,53 @@ export interface APIResponse<T> {
   status: number;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getErrorMessage(data: unknown, fallback: string): string {
+  if (!isRecord(data)) {
+    return fallback;
+  }
+
+  const nestedError = isRecord(data.error) ? data.error : undefined;
+  const message = [
+    data.detail,
+    nestedError?.message,
+    typeof data.error === 'string' ? data.error : undefined,
+    data.message,
+  ].find((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0);
+
+  const details = nestedError?.details ?? data.details;
+  if (Array.isArray(details)) {
+    const detailMessages = details.flatMap(detail => {
+      if (!isRecord(detail) || typeof detail.msg !== 'string') {
+        return [];
+      }
+      const location = Array.isArray(detail.loc)
+        ? detail.loc
+            .filter((part): part is string | number => typeof part === 'string' || typeof part === 'number')
+            .filter(part => part !== 'body')
+            .join('.')
+        : '';
+      return [location ? `${location}: ${detail.msg}` : detail.msg];
+    });
+    if (detailMessages.length > 0) {
+      return message
+        ? `${message}: ${detailMessages.join(' ')}`
+        : detailMessages.join(' ');
+    }
+  }
+
+  return message || fallback;
+}
+
 async function request<T>(
   endpoint: string,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
   body?: any
 ): Promise<APIResponse<T>> {
-  const url = `${BASE_URL}${endpoint}`;
+  const url = `${CONFIG.API_BASE_URL}${endpoint}`;
   const token = await AsyncStorage.getItem('access_token');
   const language = await AsyncStorage.getItem('language');
   
@@ -45,7 +85,7 @@ async function request<T>(
       return { data, status };
     } else {
       return {
-        error: data?.detail || 'An error occurred while calling the service',
+        error: getErrorMessage(data, 'An error occurred while calling the service'),
         status,
       };
     }
@@ -60,7 +100,7 @@ async function request<T>(
 async function requestForm<T>(endpoint: string, body: Record<string, string>): Promise<APIResponse<T>> {
   const token = await AsyncStorage.getItem('access_token');
   try {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
+    const response = await fetch(`${CONFIG.API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -69,7 +109,9 @@ async function requestForm<T>(endpoint: string, body: Record<string, string>): P
       body: new URLSearchParams(body).toString(),
     });
     const data = await response.json().catch(() => null);
-    return response.ok ? { data, status: response.status } : { error: data?.detail || 'Request failed', status: response.status };
+    return response.ok
+      ? { data, status: response.status }
+      : { error: getErrorMessage(data, 'Request failed'), status: response.status };
   } catch (error: any) {
     return { error: error.message || 'Network connectivity issue', status: 0 };
   }

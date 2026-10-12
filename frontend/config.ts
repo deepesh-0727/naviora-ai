@@ -6,7 +6,7 @@ const ENV = process.env.EXPO_PUBLIC_ENV || process.env.NODE_ENV || 'development'
 const ENV_URLS: Record<string, string> = {
   development: 'http://localhost:8000',
   staging: 'https://naviora-staging.onrender.com',
-  production: 'https://naviora-backend.onrender.com',
+  production: 'https://naviora-backend-s6je.onrender.com',
 };
 
 const getHostUrl = (): string => {
@@ -18,7 +18,7 @@ const getHostUrl = (): string => {
     return ENV_URLS[ENV];
   }
 
-  const debuggerHost = Constants.manifest?.debuggerHost || Constants.manifest2?.extra?.expoGo?.debuggerHost;
+  const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost;
   if (debuggerHost) {
     const ip = debuggerHost.split(':')[0];
     return `http://${ip}:8000`;
@@ -36,7 +36,7 @@ const BASE = rawHost.endsWith('/api/v1') ? rawHost.slice(0, -7) : rawHost;
 
 export const CONFIG = {
   API_BASE_URL: rawHost.endsWith('/api/v1') ? rawHost : `${BASE}/api/v1`,
-  WS_BASE_URL: process.env.EXPO_PUBLIC_WS_URL || `${BASE.replace(/^http/, 'ws')}/ws`,
+  WS_BASE_URL: process.env.EXPO_PUBLIC_WS_URL || `${BASE.replace(/^http/, 'ws')}/api/v1/stream`,
   ENVIRONMENT: ENV,
 };
 

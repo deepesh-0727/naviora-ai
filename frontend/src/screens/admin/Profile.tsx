@@ -1,5 +1,5 @@
 import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
 
 import {
   NavioraAvatar,
@@ -14,7 +14,14 @@ import { useAuth } from '../../context/AuthContext';
 
 const AdminProfileScreen = () => {
   const theme = useTheme();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+
+  const confirmSignOut = () => {
+    Alert.alert('Sign out?', 'You will need to sign in again to access the admin console.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    ]);
+  };
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: theme.colors.background }]}>
@@ -33,7 +40,7 @@ const AdminProfileScreen = () => {
 
         <NavioraListItem icon="settings-outline" title="System settings" subtitle="Hospital policies and security" />
         <NavioraListItem icon="shield-checkmark-outline" title="Security center" subtitle="HIPAA and audit compliance" />
-        <NavioraListItem icon="log-out-outline" title="Sign out" subtitle="Terminate active session" />
+        <NavioraListItem icon="log-out-outline" title="Sign out" subtitle="Terminate active session" onPress={confirmSignOut} />
       </ScrollView>
     </SafeAreaView>
   );
