@@ -17,10 +17,10 @@ import DashboardScreen from '../screens/Dashboard';
 import AppointmentScreen from '../screens/Appointment';
 import VoiceAssistantScreen from '../screens/VoiceAssistant';
 import NotificationsScreen from '../screens/Notifications';
-import ProfileScreen from '../../screens/Profile';
+import ProfileScreen from '../screens/Profile';
 import NavigationScreen from '../screens/Navigation';
 import EmergencyScreen from '../screens/Emergency';
-import SettingsScreen from '../../screens/Settings';
+import SettingsScreen from '../screens/Settings';
 
 // ─── Route param lists ────────────────────────────────────────────────────────
 

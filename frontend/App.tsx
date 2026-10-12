@@ -27,7 +27,7 @@ import ForgotPasswordScreen from './src/screens/ForgotPassword';
 import ResetPasswordScreen from './src/screens/ResetPassword';
 import OTPScreen from './src/patient/screens/OTP';
 import RegistrationScreen from './src/patient/screens/Registration';
-import RoleBasedNavigator from './src/navigation/RoleBasedNavigator';
+import PatientRoleNavigator from './src/navigation/PatientRoleNavigator';
 
 const Stack = createStackNavigator();
 
@@ -63,7 +63,7 @@ function RootNavigator() {
       >
         {authenticated ? (
           <>
-            <Stack.Screen name="Main" component={RoleBasedNavigator} options={{ headerShown: false }} />
+            <Stack.Screen name="Main" component={PatientRoleNavigator} options={{ headerShown: false }} />
             <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ headerShown: false }} />
           </>
         ) : (

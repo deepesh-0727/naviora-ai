@@ -199,7 +199,7 @@ export const api = {
     getSettings: () => apiClient.get<Record<string, unknown>>(buildApiUrl('patient', '/settings')),
     updateSettings: (payload: Record<string, unknown>) =>
       apiClient.put<Record<string, unknown>>(buildApiUrl('patient', '/settings'), payload),
-    deleteAccount: () => apiClient.delete<void>(buildApiUrl('patient', '/auth/account')),
+    deleteAccount: (password: string) => apiClient.delete<void>(buildApiUrl('patient', '/auth/account'), { data: { password } }),
   },
   staff: {
     getQueue: <T = unknown>() => apiClient.get<T>(buildApiUrl('doctor', '/staff/doctor/queue')),
