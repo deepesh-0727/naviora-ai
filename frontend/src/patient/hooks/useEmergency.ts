@@ -9,7 +9,7 @@ export interface EmergencyState {
   status: EmergencyStatus;
   error: string | null;
   backendUnavailable: boolean;
-  trigger: (location: string, description?: string) => Promise<void>;
+  trigger: (location: { lat: number; lng: number }, condition?: string, patientId?: string) => Promise<void>;
   cancel: () => Promise<void>;
 }
 
@@ -24,12 +24,12 @@ export function useEmergency(): EmergencyState {
     return code === 404 || code === 501;
   };
 
-  const trigger = useCallback(async (location: string, description?: string) => {
+  const trigger = useCallback(async (location: { lat: number; lng: number }, condition?: string, patientId?: string) => {
     setStatus('triggering');
     setError(null);
     setBackendUnavailable(false);
     try {
-      const res = await api.patient.triggerEmergency({ location, description });
+      const res = await api.patient.triggerEmergency({ location, condition, patient_id: patientId });
       setEmergencyCase(res.data);
       setStatus('active');
     } catch (err: unknown) {

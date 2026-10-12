@@ -9,16 +9,22 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Naviora AI needs camera access for telehealth video calls.",
+        "NSMicrophoneUsageDescription": "Naviora AI needs microphone access for voice commands.",
+        "NSLocationWhenInUseUsageDescription": "Naviora AI needs your location for emergency response and indoor navigation."
+      }
     },
     "android": {
       "package": "com.naviora.ai",
       "permissions": [
-        "android.permission.DETECT_SCREEN_CAPTURE",
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.VIBRATE"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#3A5A40"
@@ -26,7 +32,19 @@
     },
     "web": {},
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow Naviora AI to access the microphone for voice commands."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Naviora AI to use your location for emergency SOS."
+        }
+      ]
     ]
   }
 }

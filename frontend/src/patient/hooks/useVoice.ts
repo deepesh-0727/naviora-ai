@@ -6,7 +6,7 @@ export interface ConversationMessage {
   id: string;
   role: 'user' | 'assistant';
   text: string;
-  audioB64?: string | null;
+  audioUrl?: string | null;
 }
 
 export type VoiceStatus = 'idle' | 'recording' | 'processing' | 'error';
@@ -50,12 +50,12 @@ export function useVoice(): VoiceState {
       form.append('audio', { uri: audioUri, name: 'audio.m4a', type: mimeType } as unknown as Blob);
 
       const res = await api.patient.processVoice(form);
-      const { query, response_text, audio_response_b64 } = res.data;
+      const { text, response_text, response_audio_url } = res.data;
 
       // Replace user placeholder with real transcript
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === userMsgId ? { ...m, text: query || 'Audio message sent' } : m,
+          m.id === userMsgId ? { ...m, text: text || 'Audio message sent' } : m,
         ),
       );
 
@@ -65,8 +65,8 @@ export function useVoice(): VoiceState {
         {
           id: nextId(),
           role: 'assistant',
-          text: response_text,
-          audioB64: audio_response_b64,
+          text: response_text || 'I received your voice request.',
+          audioUrl: response_audio_url,
         },
       ]);
       setStatus('idle');
@@ -87,7 +87,7 @@ export function useVoice(): VoiceState {
   useEffect(() => {
     void websocketClient.connect();
     const unsub = websocketClient.subscribe('voice_result', (payload: unknown) => {
-      const p = payload as { response_text?: string; query?: string };
+      const p = payload as { response_text?: string };
       if (p?.response_text) {
         setMessages((prev) => [
           ...prev,

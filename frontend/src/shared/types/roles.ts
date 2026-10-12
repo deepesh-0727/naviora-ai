@@ -23,6 +23,9 @@ export interface RoleUser {
   phone?: string;
   role: Role;
   avatar?: string;
+  blood_group?: string;
+  allergies?: string[];
+  emergency_contact?: string;
 }
 
 export const zoneForRole = (role: Role): Zone => {
