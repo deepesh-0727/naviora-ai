@@ -32,6 +32,7 @@ from app.core.monitoring import PrometheusMetricsMiddleware
 from app.core.sentry import init_sentry
 from app.middleware.audit import AuditMiddleware
 from app.core.rate_limiter import limiter
+from app.services.ws_manager import ws_manager
 
 # =========================================================
 # INIT: Logging, Error Tracking, App
@@ -242,6 +243,7 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 @app.on_event("startup")
 async def on_startup():
     logger.info("Naviora AI | Initializing Clinical Environment")
+    await ws_manager.start()
     try:
         async with SessionLocal() as db:
             await init_db(db)
@@ -253,3 +255,4 @@ async def on_startup():
 @app.on_event("shutdown")
 async def on_shutdown():
     logger.info("Naviora AI | Safe Clinical Shutdown Initiated")
+    await ws_manager.shutdown()

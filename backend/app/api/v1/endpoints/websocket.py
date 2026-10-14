@@ -56,7 +56,7 @@ async def websocket_endpoint(
         await websocket.close(code=1013, reason="Session storage unavailable")
         return
 
-    await ws_manager.connect(websocket, str(user_id))
+    await ws_manager.connect(websocket, str(user_id), claims=payload)
 
     try:
         while True:
@@ -88,6 +88,19 @@ async def websocket_endpoint(
                             "intent": result.get("intent"),
                             "response_text": result.get("response_text")
                         })
+                        target_room = (
+                            f"patient:{payload.get('patient_id') or user_id}"
+                            if payload.get("role") == "patient"
+                            else f"doctor:{payload.get('staff_id') or user_id}"
+                            if payload.get("role") == "doctor"
+                            else f"nurse:{payload.get('staff_id') or user_id}"
+                            if payload.get("role") == "nurse"
+                            else f"staff:{user_id}"
+                        )
+                        await ws_manager.broadcast_event(target_room, "voice_result", {
+                            "intent": result.get("intent"),
+                            "response_text": result.get("response_text"),
+                        })
                         await _save_session_context(redis, redis_key, user_id, session_key)
 
                         if result.get("audio_response"):
@@ -100,11 +113,14 @@ async def websocket_endpoint(
 
                 if action == "ping":
                     await websocket.send_json({"action": "pong"})
+                elif action == "pong":
+                    ws_manager.handle_pong(websocket)
                 elif action == "join_room":
                     room = data.get("room")
-                    if room:
-                        await ws_manager.join_room(websocket, room)
+                    if isinstance(room, str) and await ws_manager.join_room(websocket, room):
                         await websocket.send_json({"action": "joined_room", "room": room})
+                    elif isinstance(room, str):
+                        await websocket.send_json({"type": "error", "message": "Not authorized to join room"})
                 elif action == "leave_room":
                     room = data.get("room")
                     if room:
@@ -136,6 +152,19 @@ async def websocket_endpoint(
                                         "query": process_result.get("query"),
                                         "intent": process_result.get("intent"),
                                         "response_text": process_result.get("response_text")
+                                    })
+                                    target_room = (
+                                        f"patient:{payload.get('patient_id') or user_id}"
+                                        if payload.get("role") == "patient"
+                                        else f"doctor:{payload.get('staff_id') or user_id}"
+                                        if payload.get("role") == "doctor"
+                                        else f"nurse:{payload.get('staff_id') or user_id}"
+                                        if payload.get("role") == "nurse"
+                                        else f"staff:{user_id}"
+                                    )
+                                    await ws_manager.broadcast_event(target_room, "voice_result", {
+                                        "intent": process_result.get("intent"),
+                                        "response_text": process_result.get("response_text"),
                                     })
                                     await _save_session_context(redis, redis_key, user_id, session_key)
 
@@ -181,3 +210,5 @@ async def _save_session_context(redis: Redis, key: str, user_id: str, session_id
         json.dumps({"session_id": session_id, "user_id": int(user_id)}),
         ex=settings.CACHE_TTL,
     )
+
+

@@ -8,6 +8,7 @@ Key design decisions:
 - Provides a synchronous TestClient and async client fixture.
 """
 import os
+from unittest.mock import AsyncMock
 from typing import AsyncGenerator
 
 import pytest
@@ -32,6 +33,7 @@ os.environ["SENTRY_DSN"] = ""
 from app.main import app                          # noqa: E402 — env must be set first
 from app.db.session import get_db                 # noqa: E402
 from app.db.base import Base                      # noqa: E402  (SQLAlchemy declarative base)
+from app.services.ws_manager import ws_manager    # noqa: E402
 
 # ---------------------------------------------------------------------------
 # In-memory SQLite engine (single connection, shared across the test session)
@@ -53,6 +55,13 @@ _TestingSessionLocal = async_sessionmaker(
 )
 app.state.rbac_session_factory = _TestingSessionLocal
 app.state.audit_session_factory = _TestingSessionLocal
+
+
+@pytest.fixture(autouse=True)
+def disable_global_websocket_lifecycle(monkeypatch):
+    """Avoid requiring an external Redis server in API tests; manager tests inject their own broker."""
+    monkeypatch.setattr(ws_manager, "start", AsyncMock())
+    monkeypatch.setattr(ws_manager, "shutdown", AsyncMock())
 
 
 # ---------------------------------------------------------------------------
