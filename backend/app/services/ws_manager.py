@@ -14,6 +14,7 @@ from redis.asyncio import Redis
 from redis.asyncio.client import PubSub
 
 from app.core.config import settings
+from app.core.metrics import WS_ACTIVE_CONNECTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,7 @@ class WebSocketManager:
         """Accept an authenticated socket and add its role-specific rooms."""
         await websocket.accept()
         self.active_connections[user_id].add(websocket)
+        WS_ACTIVE_CONNECTIONS.set(sum(len(sockets) for sockets in self.active_connections.values()))
         self._claims[websocket] = claims or {}
         self._user_rooms[websocket] = set()
         user_room = f"user:{user_id}"
@@ -288,6 +290,7 @@ class WebSocketManager:
             connections.discard(websocket)
             if not connections:
                 self.active_connections.pop(user_id, None)
+        WS_ACTIVE_CONNECTIONS.set(sum(len(sockets) for sockets in self.active_connections.values()))
         if close:
             with suppress(Exception):
                 await websocket.close(code=1001 if close_reason == "Server shutting down" else 1011, reason=close_reason)

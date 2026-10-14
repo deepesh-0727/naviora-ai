@@ -13,6 +13,7 @@ from app.api import deps
 from app.models.patient import Patient
 from app.models.user import User
 from app.services.ws_manager import ws_manager
+from app.core.metrics import EMERGENCY_TRIGGERS_TOTAL
 
 router = APIRouter()
 
@@ -43,6 +44,7 @@ async def trigger_sos(
         location=request.location,
         description=request.description
     )
+    EMERGENCY_TRIGGERS_TOTAL.inc()
     return result
 
 @router.post("/respond/{emergency_id}")

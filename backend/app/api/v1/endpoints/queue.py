@@ -11,6 +11,7 @@ from app.models.doctor import Doctor
 from app.models.patient import Patient
 from app.models.user import User
 from sqlalchemy import select
+from app.core.metrics import QUEUE_POSITION_LATENCY_SECONDS
 
 router = APIRouter()
 
@@ -31,7 +32,8 @@ async def queue_status(
     elif current_user.role not in {"nurse", "staff", "admin"}:
         raise HTTPException(status_code=403, detail="You are not authorized to view the clinical queue.")
     if doctor_id is not None:
-        queue_items = await queue_service.get_queue_status(db, doctor_id)
+        with QUEUE_POSITION_LATENCY_SECONDS.time():
+            queue_items = await queue_service.get_queue_status(db, doctor_id)
         return {"items": queue_items}
 
     query = select(Appointment).where(

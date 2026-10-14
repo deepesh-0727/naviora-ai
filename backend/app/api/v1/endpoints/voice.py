@@ -15,6 +15,7 @@ from app.services.ws_manager import ws_manager
 from app.services.voice.voice_orchestrator import voice_orchestrator
 from app.services.voice.stt_service import stt_service
 from app.services.voice.tts_service import tts_service
+from app.core.metrics import VOICE_REQUESTS_TOTAL
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ async def process_voice_command(
     current_user: User = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
+    VOICE_REQUESTS_TOTAL.inc()
     """
     Full voice command pipeline for the NavioraAI mobile app.
     Accepts raw audio and returns both text and audio responses.
@@ -164,6 +166,7 @@ async def process_text_command(
     current_user: User = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
+    VOICE_REQUESTS_TOTAL.inc()
     """
     Runs HospitalBrain intent classification + IntentExecutor on a pre-transcribed text query.
     Useful when the client handles STT locally (e.g., iOS SpeechRecognizer).
@@ -232,6 +235,7 @@ async def transcribe_audio(
     language: Optional[str] = Form(None, description="ISO-639-1 language code, e.g. 'hi' for Hindi"),
     current_user: User = Depends(deps.get_current_active_user),
 ):
+    VOICE_REQUESTS_TOTAL.inc()
     """
     Lightweight STT-only endpoint. Useful for live transcription UIs.
     """
@@ -261,6 +265,7 @@ async def synthesize_speech(
     body: SynthesizeRequest,
     current_user: User = Depends(deps.get_current_active_user),
 ):
+    VOICE_REQUESTS_TOTAL.inc()
     """
     Standalone TTS endpoint. Returns audio as base64 JSON so it plays
     in React Native via `expo-av` without a streaming server.

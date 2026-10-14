@@ -16,6 +16,7 @@ from slowapi import _rate_limit_exceeded_handler
 from redis.exceptions import RedisError
 
 from app.core.config import settings
+from app.core.metrics import metrics_access_allowed
 from app.core.logging import setup_logging
 from app.core.middleware import EnterpriseMiddleware
 from app.core.exceptions import (
@@ -64,6 +65,18 @@ async def redis_unavailable_handler(request: Request, exc: RedisError) -> JSONRe
 
 
 app.add_exception_handler(RedisError, redis_unavailable_handler)
+
+
+@app.middleware("http")
+async def protect_metrics_endpoint(request: Request, call_next):
+    if request.url.path == "/metrics" and not metrics_access_allowed(
+        settings.ENVIRONMENT,
+        settings.METRICS_TOKEN,
+        request.client.host if request.client else None,
+        request.headers.get("X-Metrics-Token"),
+    ):
+        return JSONResponse(status_code=403, content={"detail": "Metrics access denied."})
+    return await call_next(request)
 
 PUBLIC_API_PATHS = {
     "/api/v1/auth/login",
