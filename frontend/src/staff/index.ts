@@ -6,3 +6,6 @@ export { default as DoctorQueue } from './screens/DoctorQueue';
 export { default as PatientDetail } from './screens/PatientDetail';
 export { default as NurseDashboard } from './screens/NurseDashboard';
 export { default as FrontDeskDashboard } from './screens/FrontDeskDashboard';
+export { default as PharmacyDashboard } from './screens/PharmacyDashboard';
+export { default as FacilitiesDashboard } from './screens/FacilitiesDashboard';
+export { default as EmergencyConsole } from './screens/EmergencyConsole';

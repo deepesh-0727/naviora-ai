@@ -12,6 +12,9 @@ import DoctorQueue from '../screens/DoctorQueue';
 import PatientDetail from '../screens/PatientDetail';
 import NurseDashboard from '../screens/NurseDashboard';
 import FrontDeskDashboard from '../screens/FrontDeskDashboard';
+import PharmacyDashboard from '../screens/PharmacyDashboard';
+import FacilitiesDashboard from '../screens/FacilitiesDashboard';
+import EmergencyConsole from '../screens/EmergencyConsole';
 
 type TabIconName = ComponentProps<typeof Ionicons>['name'];
 type TabDefinition = { name: string; title: string; endpoint: string; icon: TabIconName };
@@ -83,6 +86,9 @@ function RoleTabs({ role }: { role: Exclude<Role, 'patient' | 'admin' | 'super_a
               if (role === 'doctor' && tab.name === 'Queue') return <DoctorQueue />;
               if (role === 'nurse' && tab.name === 'Home') return <NurseDashboard />;
               if (role === 'front_desk' && tab.name === 'Home') return <FrontDeskDashboard />;
+              if (role === 'pharmacy') return <PharmacyDashboard />;
+              if (role === 'facilities') return <FacilitiesDashboard />;
+              if (role === 'emergency') return <EmergencyConsole />;
               return <StaffModuleScreen title={tab.title} endpoint={tab.endpoint} />;
             }}
           </Tab.Screen>
