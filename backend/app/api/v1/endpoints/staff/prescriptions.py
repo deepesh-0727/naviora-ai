@@ -14,6 +14,7 @@ from app.models.operations import Admission, LabOrder, Referral
 from app.models.patient import Patient
 from app.models.pharmacy import Prescription
 from app.models.user import User
+from app.services.ws_manager import ws_manager
 
 router = APIRouter()
 
@@ -94,6 +95,12 @@ async def create_prescription(
     db.add(prescription)
     await db.commit()
     await db.refresh(prescription)
+    await ws_manager.broadcast_event("pharmacy", "prescription_new", {
+        "prescription_id": prescription.id,
+        "patient_id": prescription.patient_id,
+        "medication": prescription.medication,
+        "status": prescription.status,
+    })
     return prescription
 
 
@@ -123,6 +130,11 @@ async def create_lab_order(
     db.add(order)
     await db.commit()
     await db.refresh(order)
+    await ws_manager.broadcast_event("pharmacy", "lab_order_new", {
+        "lab_order_id": order.id,
+        "patient_id": order.patient_id,
+        "test_name": order.test_name,
+    })
     return order
 
 

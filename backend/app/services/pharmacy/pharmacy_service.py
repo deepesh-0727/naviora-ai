@@ -36,10 +36,12 @@ class PharmacyService:
         db.add(db_prescription)
         await db.commit()
         await db.refresh(db_prescription)
-
-        # Notify patient
-        # Note: We'd need to fetch the patient's user_id if we want to send a personal message.
-        # For now, let's assume the caller handles specific notifications or we add user_id fetch here.
+        await ws_manager.broadcast_event("pharmacy", "prescription_new", {
+            "prescription_id": db_prescription.id,
+            "patient_id": db_prescription.patient_id,
+            "medication": db_prescription.medication,
+            "status": db_prescription.status,
+        })
 
         return db_prescription
 
@@ -68,18 +70,25 @@ class PharmacyService:
             if item.quantity <= item.reorder_level:
                 await ws_manager.broadcast_to_room(
                     {
-                        "type": "inventory_alert",
-                        "item": item.name,
-                        "quantity": item.quantity,
-                        "message": f"Low stock alert for {item.name}"
+                        "event": "inventory_alert",
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "data": {
+                            "item": item.name,
+                            "quantity": item.quantity,
+                            "message": f"Low stock alert for {item.name}"
+                        },
                     },
-                    "pharmacy_staff"
+                    "pharmacy"
                 )
 
         prescription.status = "dispensed"
         prescription.updated_at = datetime.utcnow()
         await db.commit()
         await db.refresh(prescription)
+        await ws_manager.broadcast_event(f"patient:{prescription.patient_id}", "prescription_ready", {
+            "prescription_id": prescription.id,
+            "status": prescription.status,
+        })
 
         return prescription
 

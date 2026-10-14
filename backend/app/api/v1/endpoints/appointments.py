@@ -13,6 +13,7 @@ from app.models.patient import Patient
 from app.models.doctor import Doctor, Department
 from app.services.availability_service import database_datetime, get_available_slots
 from app.core.rate_limiter import limiter, user_or_ip_key
+from app.services.ws_manager import ws_manager
 
 router = APIRouter()
 
@@ -114,6 +115,17 @@ async def book_appointment(
     db.add(db_apt)
     await db.commit()
     await db.refresh(db_apt)
+
+    event_data = {
+        "appointment_id": db_apt.id,
+        "doctor_id": db_apt.doctor_id,
+        "patient_id": db_apt.patient_id,
+        "scheduled_time": db_apt.scheduled_time.isoformat(),
+        "status": db_apt.status,
+        "queue_position": db_apt.queue_position,
+    }
+    await ws_manager.broadcast_event(f"doctor:{db_apt.doctor_id}", "queue_update", event_data)
+    await ws_manager.broadcast_event(f"patient:{db_apt.patient_id}", "queue_update", event_data)
 
     return {
         "id": db_apt.id,
@@ -320,4 +332,12 @@ async def cancel_appointment(
 
     apt.status = "cancelled"
     await db.commit()
+    event_data = {
+        "appointment_id": apt.id,
+        "doctor_id": apt.doctor_id,
+        "patient_id": apt.patient_id,
+        "status": apt.status,
+    }
+    await ws_manager.broadcast_event(f"doctor:{apt.doctor_id}", "queue_update", event_data)
+    await ws_manager.broadcast_event(f"patient:{apt.patient_id}", "queue_update", event_data)
     return {"message": f"Appointment {target_id} canceled successfully"}

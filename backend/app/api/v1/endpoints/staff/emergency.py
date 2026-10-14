@@ -107,8 +107,10 @@ async def assign_responder(
     case.updated_at = datetime.utcnow()
     case.acknowledged_at = case.acknowledged_at or case.updated_at
     await db.commit()
-    payload_out = {"action": "emergency_ack", "emergency_id": case.id, "patient_id": case.patient_id, "responder_id": responder.id, "status": case.status}
-    await ws_manager.broadcast_to_room(payload_out, "emergency")
+    payload_out = {"emergency_id": case.id, "patient_id": case.patient_id, "responder_id": responder.id, "status": case.status}
+    await ws_manager.broadcast_event("emergency", "emergency_ack", payload_out)
+    if case.patient_id is not None:
+        await ws_manager.broadcast_event(f"patient:{case.patient_id}", "emergency_ack", payload_out)
     return payload_out
 
 
@@ -140,10 +142,11 @@ async def update_emergency_status(
     if payload.status == "acknowledged":
         case.acknowledged_at = case.acknowledged_at or case.updated_at
     await db.commit()
-    event = {"action": "emergency_status", "emergency_id": case.id, "patient_id": case.patient_id, "status": case.status, "updated_at": case.updated_at}
-    await ws_manager.broadcast_to_room(event, "emergency")
+    event_name = "emergency_en_route" if payload.status == "en_route" else "emergency_arrived" if payload.status == "arrived" else "emergency_status"
+    event = {"emergency_id": case.id, "patient_id": case.patient_id, "status": case.status, "updated_at": case.updated_at.isoformat()}
+    await ws_manager.broadcast_event("emergency", event_name, event)
     if case.patient_id is not None:
-        await ws_manager.send_personal_message(event, str(case.patient_id))
+        await ws_manager.broadcast_event(f"patient:{case.patient_id}", event_name, event)
     return event
 
 
@@ -161,8 +164,8 @@ async def send_emergency_message(
     db.add(message)
     await db.commit()
     await db.refresh(message)
-    event = {"action": "emergency_message", "emergency_id": case.id, "patient_id": case.patient_id, "message": message.message, "sender_id": current_user.id, "created_at": message.created_at}
-    await ws_manager.broadcast_to_room(event, "emergency")
+    event = {"emergency_id": case.id, "patient_id": case.patient_id, "message": message.message, "sender_id": current_user.id, "created_at": message.created_at.isoformat()}
+    await ws_manager.broadcast_event("emergency", "emergency_message", event)
     if case.patient_id is not None:
-        await ws_manager.send_personal_message(event, str(case.patient_id))
+        await ws_manager.broadcast_event(f"patient:{case.patient_id}", "emergency_message", event)
     return event

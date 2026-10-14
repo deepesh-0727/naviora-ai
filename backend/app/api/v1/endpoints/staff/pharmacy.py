@@ -11,6 +11,7 @@ from app.models.communication import Notification
 from app.models.patient import Patient
 from app.models.pharmacy import Inventory, Prescription
 from app.models.user import User
+from app.services.ws_manager import ws_manager
 
 router = APIRouter()
 PHARMACY_ROLES = ["pharmacy", "admin", "super_admin"]
@@ -79,6 +80,10 @@ async def dispense(
     prescription.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(prescription)
+    await ws_manager.broadcast_event(f"patient:{prescription.patient_id}", "prescription_ready", {
+        "prescription_id": prescription.id,
+        "status": prescription.status,
+    })
     return {"prescription_id": prescription.id, "status": prescription.status, "remaining_stock": stock.quantity}
 
 
@@ -148,4 +153,14 @@ async def notify_pickup(
     db.add(notification)
     await db.commit()
     await db.refresh(notification)
+    await ws_manager.broadcast_event(f"patient:{patient.id}", "notification_new", {
+        "notification_id": notification.id,
+        "title": notification.title,
+        "message": notification.message,
+        "data": notification.data,
+    })
+    await ws_manager.broadcast_event(f"patient:{patient.id}", "prescription_ready", {
+        "prescription_id": prescription.id,
+        "status": prescription.status,
+    })
     return {"notification_id": notification.id, "status": "queued"}

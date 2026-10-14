@@ -8,10 +8,10 @@ import uuid
 from collections import defaultdict
 from contextlib import suppress
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import WebSocket, WebSocketDisconnect
 from redis.asyncio import Redis
+from redis.asyncio.client import PubSub
 
 from app.core.config import settings
 
@@ -32,10 +32,10 @@ class WebSocketManager:
         self.rooms: defaultdict[str, set[WebSocket]] = defaultdict(set)
         self.active_connections: defaultdict[str, set[WebSocket]] = defaultdict(set)
         self._user_rooms: dict[WebSocket, set[str]] = {}
-        self._claims: dict[WebSocket, dict[str, Any]] = {}
+        self._claims: dict[WebSocket, dict[str, object]] = {}
         self._pong_events: dict[WebSocket, asyncio.Event] = {}
         self._heartbeat_tasks: dict[WebSocket, asyncio.Task[None]] = {}
-        self._pubsub: Any | None = None
+        self._pubsub: PubSub | None = None
         self._listener_task: asyncio.Task[None] | None = None
         self._recent_messages: dict[str, float] = {}
 
@@ -126,7 +126,7 @@ class WebSocketManager:
         self._recent_messages[message_id] = now + self.DEDUPE_TTL
         return False
 
-    async def broadcast(self, room: str, message: dict[str, Any]) -> None:
+    async def broadcast(self, room: str, message: dict[str, object]) -> None:
         """Publish to Redis and deliver once to this instance's room members."""
         if not self._listener_task or self._listener_task.done():
             raise RuntimeError("WebSocketManager is not started; Redis pub/sub is required for broadcast.")
@@ -136,7 +136,7 @@ class WebSocketManager:
         self._was_delivered(message_id)
         await self._deliver_room(room, message)
 
-    async def broadcast_event(self, room: str, event: str, data: dict[str, Any]) -> bool:
+    async def broadcast_event(self, room: str, event: str, data: dict[str, object]) -> bool:
         """Send a standard event envelope; Redis failure never blocks its API caller."""
         payload = {
             "event": event,
@@ -150,7 +150,7 @@ class WebSocketManager:
             logger.exception("Unable to publish WebSocket event %s to room %s", event, room)
             return False
 
-    async def _deliver_room(self, room: str, message: dict[str, Any]) -> None:
+    async def _deliver_room(self, room: str, message: dict[str, object]) -> None:
         for websocket in list(self.rooms.get(room, set())):
             try:
                 await websocket.send_json(message)
@@ -161,7 +161,7 @@ class WebSocketManager:
                 logger.exception("Unable to deliver WebSocket event to room %s", room)
                 await self._remove_connection(websocket)
 
-    async def connect(self, websocket: WebSocket, user_id: str, claims: dict[str, Any] | None = None) -> None:
+    async def connect(self, websocket: WebSocket, user_id: str, claims: dict[str, object] | None = None) -> None:
         """Accept an authenticated socket and add its role-specific rooms."""
         await websocket.accept()
         self.active_connections[user_id].add(websocket)
@@ -181,7 +181,7 @@ class WebSocketManager:
         logger.info("User %s connected via WebSocket", user_id)
 
     @staticmethod
-    def _rooms_for_claims(user_id: str, claims: dict[str, Any]) -> set[str]:
+    def _rooms_for_claims(user_id: str, claims: dict[str, object]) -> set[str]:
         role = claims.get("role")
         rooms: set[str] = set()
         if role == "patient":
@@ -190,7 +190,7 @@ class WebSocketManager:
             rooms.add(f"doctor:{claims.get('staff_id') or user_id}")
         elif role == "nurse":
             rooms.add(f"nurse:{claims.get('staff_id') or user_id}")
-        elif role in {"doctor", "nurse", "front_desk", "pharmacy", "facilities", "emergency", "staff"}:
+        elif role in {"doctor", "nurse", "front_desk", "pharmacy", "facilities", "emergency", "staff", "admin", "super_admin"}:
             rooms.add(f"staff:{user_id}")
         ward_id = claims.get("ward_id")
         if role in {"doctor", "nurse", "staff", "admin", "super_admin"} and ward_id:
@@ -208,7 +208,7 @@ class WebSocketManager:
         return rooms
 
     @staticmethod
-    def _authorized_for_room(room: str, claims: dict[str, Any], user_id: str) -> bool:
+    def _authorized_for_room(room: str, claims: dict[str, object], user_id: str) -> bool:
         role = claims.get("role")
         if room == f"user:{user_id}":
             return str(claims.get("sub") or user_id) == user_id
@@ -219,7 +219,7 @@ class WebSocketManager:
         if room == f"nurse:{claims.get('staff_id') or user_id}":
             return role == "nurse"
         if room == f"staff:{user_id}":
-            return role in {"doctor", "nurse", "front_desk", "pharmacy", "facilities", "emergency", "staff"}
+            return role in {"doctor", "nurse", "front_desk", "pharmacy", "facilities", "emergency", "staff", "admin", "super_admin"}
         if room == f"ward:{claims.get('ward_id')}" and claims.get("ward_id"):
             return role in {"doctor", "nurse", "staff", "admin", "super_admin"}
         allowed_roles = {
@@ -296,18 +296,18 @@ class WebSocketManager:
         """Remove a socket from every room and user registry."""
         await self._remove_connection(websocket)
 
-    async def send_personal_message(self, message: dict[str, Any], user_id: str) -> None:
+    async def send_personal_message(self, message: dict[str, object], user_id: str) -> None:
         """Publish to the user's private room across all backend instances."""
         await self.broadcast_to_room(message, f"user:{user_id}")
 
-    async def broadcast_to_room(self, message: dict[str, Any], room_name: str) -> None:
+    async def broadcast_to_room(self, message: dict[str, object], room_name: str) -> None:
         """Compatibility wrapper that retains existing room broadcast call sites."""
         try:
             await self.broadcast(room_name, message)
         except Exception:
             logger.exception("Unable to publish WebSocket message to room %s", room_name)
 
-    async def broadcast_global(self, message: dict[str, Any]) -> None:
+    async def broadcast_global(self, message: dict[str, object]) -> None:
         """Broadcast to all clients subscribed to the shared all-queue room."""
         await self.broadcast_to_room(message, "queue:all")
 

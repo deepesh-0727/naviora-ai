@@ -12,6 +12,7 @@ from app.models.emergency import EmergencyCase
 from app.api import deps
 from app.models.patient import Patient
 from app.models.user import User
+from app.services.ws_manager import ws_manager
 
 router = APIRouter()
 
@@ -137,6 +138,10 @@ async def resolve_emergency(
     emergency.status = "resolved"
     await db.commit()
     await db.refresh(emergency)
+    event_data = {"emergency_id": emergency.id, "patient_id": emergency.patient_id, "status": emergency.status}
+    await ws_manager.broadcast_event("emergency", "emergency_status", event_data)
+    if emergency.patient_id is not None:
+        await ws_manager.broadcast_event(f"patient:{emergency.patient_id}", "emergency_status", event_data)
     return {"id": emergency.id, "status": emergency.status}
 
 @router.get("/nearby-staff")
@@ -184,4 +189,8 @@ async def staff_arrived(
     emergency.arrival_time = datetime.utcnow()
     emergency.status = "staff_arrived"
     await db.commit()
+    event_data = {"emergency_id": emergency.id, "patient_id": emergency.patient_id, "status": emergency.status, "arrival_time": emergency.arrival_time.isoformat()}
+    await ws_manager.broadcast_event("emergency", "emergency_arrived", event_data)
+    if emergency.patient_id is not None:
+        await ws_manager.broadcast_event(f"patient:{emergency.patient_id}", "emergency_arrived", event_data)
     return {"emergency_id": emergency.id, "status": emergency.status, "arrival_time": emergency.arrival_time}

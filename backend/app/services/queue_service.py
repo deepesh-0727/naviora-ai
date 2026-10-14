@@ -255,9 +255,10 @@ class QueueService:
                 entry.status = "treating"
             await db.commit()
             await db.refresh(next_appointment)
-            await ws_manager.send_personal_message(
-                {"type": "queue_alert", "message": "It is your turn. Please proceed to the doctor's cabin."},
-                str(next_appointment.patient.user_id),
+            await ws_manager.broadcast_event(
+                f"patient:{next_appointment.patient_id}",
+                "queue_alert",
+                {"message": "It is your turn. Please proceed to the doctor's cabin."},
             )
             await self.notify_queue_updates(db, doctor_id, redis_client=redis)
             return next_appointment
@@ -293,9 +294,10 @@ class QueueService:
                 if entry is not None:
                     entry.position = position
                     entry.status = "treating" if appointment.status == "treating" else "queued"
-                await ws_manager.send_personal_message(
-                    {"type": "queue_update", "position": position, "estimated_wait": wait},
-                    str(appointment.patient.user_id),
+                await ws_manager.broadcast_event(
+                    f"patient:{appointment.patient_id}",
+                    "queue_update",
+                    {"position": position, "estimated_wait": wait, "appointment_id": appointment.id},
                 )
             await db.commit()
         except RedisError as exc:

@@ -33,24 +33,23 @@ class EmergencyService:
         await db.commit()
         await db.refresh(db_emergency)
 
-        # Alert Payload
-        alert = {
-            "type": "emergency_alert",
+        event_data = {
             "emergency_id": db_emergency.id,
+            "patient_id": db_emergency.patient_id,
             "priority": db_emergency.priority,
             "location": db_emergency.location_desc,
             "description": db_emergency.description,
             "triage": triage_data
         }
-
-        # Broadcast to all connected staff (assuming they join 'staff_room')
-        await ws_manager.broadcast_to_room(alert, "staff_room")
+        await ws_manager.broadcast_event("emergency", "emergency_new", event_data)
+        if db_emergency.patient_id is not None:
+            await ws_manager.broadcast_event(f"patient:{db_emergency.patient_id}", "emergency_new", event_data)
 
         # Global broadcast for extreme critical cases (severity 1 or 2)
         if int(db_emergency.priority) <= 2:
-            await ws_manager.broadcast_global({
-                "type": "global_critical_alert",
-                "message": f"CRITICAL: Emergency at {location}. Clear routes for medical team."
+            await ws_manager.broadcast_event("emergency", "global_critical_alert", {
+                "emergency_id": db_emergency.id,
+                "message": f"CRITICAL: Emergency at {location}. Clear routes for medical team.",
             })
 
         return {
@@ -79,12 +78,14 @@ class EmergencyService:
         await db.commit()
         await db.refresh(emergency)
 
-        await ws_manager.broadcast_global({
-            "type": "emergency_staff_assigned",
+        event_data = {
             "emergency_id": emergency.id,
             "staff_id": staff_id,
             "location": emergency.location_desc,
-        })
+        }
+        await ws_manager.broadcast_event("emergency", "emergency_ack", event_data)
+        if emergency.patient_id is not None:
+            await ws_manager.broadcast_event(f"patient:{emergency.patient_id}", "emergency_ack", event_data)
         return emergency
 
 emergency_service = EmergencyService()

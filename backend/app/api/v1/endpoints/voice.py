@@ -4,11 +4,14 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from pydantic import BaseModel, Field
 
 from app.api import deps
 from app.db.session import get_db
 from app.models.user import User
+from app.models.patient import Patient
+from app.services.ws_manager import ws_manager
 from app.services.voice.voice_orchestrator import voice_orchestrator
 from app.services.voice.stt_service import stt_service
 from app.services.voice.tts_service import tts_service
@@ -115,6 +118,19 @@ async def process_voice_command(
             detail=result["error"],
         )
 
+    if current_user.role == "patient":
+        patient_id = await db.scalar(select(Patient.id).where(Patient.user_id == current_user.id))
+        if patient_id is not None:
+            await ws_manager.broadcast_event(f"patient:{patient_id}", "voice_result", {
+                "intent": result.get("intent"),
+                "response_text": result.get("response_text"),
+            })
+    else:
+        await ws_manager.broadcast_event(f"staff:{current_user.id}", "voice_result", {
+            "intent": result.get("intent"),
+            "response_text": result.get("response_text"),
+        })
+
     # Encode audio response to base64 so it travels safely over JSON
     audio_b64: Optional[str] = None
     if return_audio and result.get("audio_response"):
@@ -173,6 +189,18 @@ async def process_text_command(
         )
 
     audio_b64: Optional[str] = None
+    if current_user.role == "patient":
+        patient_id = await db.scalar(select(Patient.id).where(Patient.user_id == current_user.id))
+        if patient_id is not None:
+            await ws_manager.broadcast_event(f"patient:{patient_id}", "voice_result", {
+                "intent": analysis.get("intent"),
+                "response_text": response_text,
+            })
+    else:
+        await ws_manager.broadcast_event(f"staff:{current_user.id}", "voice_result", {
+            "intent": analysis.get("intent"),
+            "response_text": response_text,
+        })
     if return_audio:
         try:
             audio_bytes = await tts_service.synthesize(response_text)

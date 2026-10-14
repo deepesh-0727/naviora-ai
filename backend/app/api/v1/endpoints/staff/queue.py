@@ -58,9 +58,9 @@ async def update_queue_status(
             queue_entry.served_at = datetime.utcnow()
     await db.commit()
     await db.refresh(appointment)
-    payload = {"action": "queue_update", "appointment_id": appointment.id, "doctor_id": appointment.doctor_id, "patient_id": appointment.patient_id, "status": appointment.status}
-    await ws_manager.broadcast_to_room(payload, f"doctor:{appointment.doctor_id}")
-    await ws_manager.send_personal_message(payload, str(appointment.patient_id))
+    payload = {"appointment_id": appointment.id, "doctor_id": appointment.doctor_id, "patient_id": appointment.patient_id, "status": appointment.status, "queue_position": appointment.queue_position}
+    await ws_manager.broadcast_event(f"doctor:{appointment.doctor_id}", "queue_update", payload)
+    await ws_manager.broadcast_event(f"patient:{appointment.patient_id}", "queue_update", payload)
     return {"id": appointment.id, "status": appointment.status, "queue_position": appointment.queue_position}
 
 
@@ -92,7 +92,10 @@ async def reorder_queue(
         if appointment_id in queue_entries:
             queue_entries[appointment_id].position = position
     await db.commit()
-    await ws_manager.broadcast_to_room({"action": "queue_update", "doctor_id": doctor_id, "appointment_ids": reorder.appointment_ids}, f"doctor:{doctor_id}")
+    payload = {"doctor_id": doctor_id, "appointment_ids": reorder.appointment_ids}
+    await ws_manager.broadcast_event(f"doctor:{doctor_id}", "queue_update", payload)
+    for appointment in appointments:
+        await ws_manager.broadcast_event(f"patient:{appointment.patient_id}", "queue_update", payload)
     return {"doctor_id": doctor_id, "appointment_ids": reorder.appointment_ids}
 
 
@@ -115,5 +118,7 @@ async def mark_no_show(
     if queue_entry is not None:
         queue_entry.status = "no_show"
     await db.commit()
-    await ws_manager.broadcast_to_room({"action": "queue_update", "appointment_id": appointment.id, "doctor_id": appointment.doctor_id, "status": "no_show"}, f"doctor:{appointment.doctor_id}")
+    payload = {"appointment_id": appointment.id, "doctor_id": appointment.doctor_id, "patient_id": appointment.patient_id, "status": "no_show"}
+    await ws_manager.broadcast_event(f"doctor:{appointment.doctor_id}", "queue_update", payload)
+    await ws_manager.broadcast_event(f"patient:{appointment.patient_id}", "queue_update", payload)
     return {"id": appointment.id, "status": appointment.status}
