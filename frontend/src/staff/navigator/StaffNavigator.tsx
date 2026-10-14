@@ -7,6 +7,9 @@ import { RoleGuard } from '../../shared/guards/RoleGuard';
 import { useRole } from '../../shared/contexts/RoleContext';
 import type { Role } from '../../shared/types/roles';
 import StaffModuleScreen from './StaffModuleScreen';
+import DoctorDashboard from '../screens/DoctorDashboard';
+import DoctorQueue from '../screens/DoctorQueue';
+import PatientDetail from '../screens/PatientDetail';
 
 type TabIconName = ComponentProps<typeof Ionicons>['name'];
 type TabDefinition = { name: string; title: string; endpoint: string; icon: TabIconName };
@@ -73,9 +76,21 @@ function RoleTabs({ role }: { role: Exclude<Role, 'patient' | 'admin' | 'super_a
       >
         {STAFF_TABS[role].map((tab) => (
           <Tab.Screen key={tab.name} name={tab.name} options={{ title: tab.name }}>
-            {() => <StaffModuleScreen title={tab.title} endpoint={tab.endpoint} />}
+            {() => {
+              if (role === 'doctor' && tab.name === 'Home') return <DoctorDashboard />;
+              if (role === 'doctor' && tab.name === 'Queue') return <DoctorQueue />;
+              if (role === 'doctor' && tab.name === 'Patients') return <PatientDetail />;
+              return <StaffModuleScreen title={tab.title} endpoint={tab.endpoint} />;
+            }}
           </Tab.Screen>
         ))}
+        {role === 'doctor' ? (
+          <Tab.Screen
+            name="PatientDetail"
+            component={PatientDetail}
+            options={{ tabBarButton: () => null, title: 'Patient Detail' }}
+          />
+        ) : null}
       </Tab.Navigator>
     </RoleGuard>
   );
