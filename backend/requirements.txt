@@ -18,6 +18,7 @@ shapely>=2.0.4
 pydantic[email]>=2.6.4
 pydantic-settings>=2.2.1
 python-dotenv>=1.0.1
+cryptography>=42.0.0
 
 # Security & Auth
 python-jose[cryptography]>=3.3.0
