@@ -9,3 +9,6 @@ export { default as FrontDeskDashboard } from './screens/FrontDeskDashboard';
 export { default as PharmacyDashboard } from './screens/PharmacyDashboard';
 export { default as FacilitiesDashboard } from './screens/FacilitiesDashboard';
 export { default as EmergencyConsole } from './screens/EmergencyConsole';
+export { default as StaffNotifications } from './screens/StaffNotifications';
+export { default as StaffProfile } from './screens/StaffProfile';
+export { default as StaffSettings } from './screens/StaffSettings';

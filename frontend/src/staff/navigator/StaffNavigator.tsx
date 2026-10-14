@@ -15,6 +15,9 @@ import FrontDeskDashboard from '../screens/FrontDeskDashboard';
 import PharmacyDashboard from '../screens/PharmacyDashboard';
 import FacilitiesDashboard from '../screens/FacilitiesDashboard';
 import EmergencyConsole from '../screens/EmergencyConsole';
+import StaffNotifications from '../screens/StaffNotifications';
+import StaffProfile from '../screens/StaffProfile';
+import StaffSettings from '../screens/StaffSettings';
 
 type TabIconName = ComponentProps<typeof Ionicons>['name'];
 type TabDefinition = { name: string; title: string; endpoint: string; icon: TabIconName };
@@ -86,6 +89,8 @@ function RoleTabs({ role }: { role: Exclude<Role, 'patient' | 'admin' | 'super_a
               if (role === 'doctor' && tab.name === 'Queue') return <DoctorQueue />;
               if (role === 'nurse' && tab.name === 'Home') return <NurseDashboard />;
               if (role === 'front_desk' && tab.name === 'Home') return <FrontDeskDashboard />;
+              if (tab.name === 'Notifications') return <StaffNotifications />;
+              if (tab.name === 'Profile') return <StaffProfile />;
               if (role === 'pharmacy') return <PharmacyDashboard />;
               if (role === 'facilities') return <FacilitiesDashboard />;
               if (role === 'emergency') return <EmergencyConsole />;
@@ -100,6 +105,7 @@ function RoleTabs({ role }: { role: Exclude<Role, 'patient' | 'admin' | 'super_a
             options={{ tabBarButton: () => null, title: 'Patient Detail' }}
           />
         ) : null}
+        <Tab.Screen name="StaffSettings" component={StaffSettings} options={{ tabBarButton: () => null, title: 'Staff Settings' }} />
       </Tab.Navigator>
     </RoleGuard>
   );
