@@ -15,7 +15,7 @@ class BillingAgent(BaseAgent):
         super().__init__(name="BillingAgent", system_prompt=system_prompt, ollama_url=ollama_url)
 
     async def execute(self, user_query: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info(f"BillingAgent processing: '{user_query}'")
+        logger.info("BillingAgent processing a request")
 
         prompt = (
             f"Analyze the following billing query:\n"
@@ -36,7 +36,5 @@ class BillingAgent(BaseAgent):
                 return json.loads(response_text[json_start:json_end])
             return json.loads(response_text)
         except Exception as e:
-            logger.warning(f"BillingAgent using heuristic extraction: {e}")
-            query_lower = user_query.lower()
-            q_type = "estimation" if "cost" in query_lower or "estimate" in query_lower or "price" in query_lower else ("payment_method" if "pay" in query_lower or "upi" in query_lower or "card" in query_lower else "invoice_status")
-            return {"query_type": q_type, "amount_mentioned": 1500.0, "is_payment_intent": "pay" in query_lower}
+            logger.warning("Billing extraction unavailable: %s", type(e).__name__)
+            return {"query_type": None, "amount_mentioned": None, "is_payment_intent": None}

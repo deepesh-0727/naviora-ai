@@ -14,6 +14,8 @@ class IntentExecutor:
 
     async def execute(self, db: AsyncSession, user: User, analysis: dict[str, Any]) -> str:
         intent = analysis.get("intent")
+        if analysis.get("needs_clarification") or float(analysis.get("confidence") or 0) < 0.6:
+            return "I could not identify the request with enough confidence. Please rephrase or provide more details."
         details = analysis.get("specialized_details") or {}
         if intent != "emergency":
             raise HTTPException(

@@ -113,3 +113,6 @@ ollama_data/
 htmlcov/
 coverage.xml
 .tox/
+
+__pycache__/
+*.pyc

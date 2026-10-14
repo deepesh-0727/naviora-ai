@@ -15,7 +15,7 @@ class NavigationAgent(BaseAgent):
         super().__init__(name="NavigationAgent", system_prompt=system_prompt, ollama_url=ollama_url)
 
     async def execute(self, user_query: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info(f"NavigationAgent processing: '{user_query}'")
+        logger.info("NavigationAgent processing a request")
 
         prompt = (
             f"Extract navigation details from the following query:\n"
@@ -38,12 +38,10 @@ class NavigationAgent(BaseAgent):
                 return json.loads(response_text[json_start:json_end])
             return json.loads(response_text)
         except Exception as e:
-            logger.warning(f"NavigationAgent using heuristic extraction: {e}")
-            query_lower = user_query.lower()
-            dest = "G_PHARMACY" if "pharmacy" in query_lower or "medicine" in query_lower else ("F1_CARDIOLOGY" if "cardio" in query_lower or "heart" in query_lower else ("F2_ORTHOPEDICS" if "ortho" in query_lower or "bone" in query_lower else "G_RECEPTION"))
+            logger.warning("Navigation extraction unavailable: %s", type(e).__name__)
             return {
-                "destination": dest,
-                "current_location": context.get("current_location") or "G_ENTRANCE",
-                "needs_elevator": "wheelchair" in query_lower or "elevator" in query_lower or "lift" in query_lower,
-                "is_urgent": "emergency" in query_lower or "hurry" in query_lower
+                "destination": None,
+                "current_location": context.get("current_location"),
+                "needs_elevator": None,
+                "is_urgent": None,
             }

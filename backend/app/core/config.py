@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     # =========================================================
     AI_PROVIDER: str = os.getenv("AI_PROVIDER", "ollama")
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    OLLAMA_MODEL: str = "llama3"
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3:8b-instruct-q4_K_M")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL: str = "gpt-3.5-turbo"
     WHISPER_API_URL: str = "http://localhost:8000/stt"

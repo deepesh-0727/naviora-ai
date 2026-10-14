@@ -15,7 +15,7 @@ class AppointmentAgent(BaseAgent):
         super().__init__(name="AppointmentAgent", system_prompt=system_prompt, ollama_url=ollama_url)
 
     async def execute(self, user_query: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info(f"AppointmentAgent processing: '{user_query}'")
+        logger.info("AppointmentAgent processing a request")
 
         prompt = (
             f"Extract appointment details from the following query:\n"
@@ -39,13 +39,12 @@ class AppointmentAgent(BaseAgent):
                 return json.loads(response_text[json_start:json_end])
             return json.loads(response_text)
         except Exception as e:
-            logger.warning(f"AppointmentAgent using heuristic extraction: {e}")
+            logger.warning("Appointment detail extraction is unavailable: %s", type(e).__name__)
             query_lower = user_query.lower()
-            specialty = "Cardiology" if "cardio" in query_lower or "heart" in query_lower else ("Pediatrics" if "child" in query_lower or "pediatric" in query_lower else ("Orthopedics" if "bone" in query_lower or "ortho" in query_lower else "General Medicine"))
             return {
-                "doctor_specialty": specialty,
-                "preferred_time": "Tomorrow 10:00 AM",
-                "symptoms": user_query,
+                "doctor_specialty": "cardiology" if any(word in query_lower for word in ("cardio", "heart")) else None,
+                "preferred_time": None,
+                "symptoms": None,
                 "is_urgent": "urgent" in query_lower or "soon" in query_lower,
                 "is_checkin": any(w in query_lower for w in ["check in", "i am here", "arrived", "reached"])
             }

@@ -16,7 +16,7 @@ class EmergencyAgent(BaseAgent):
         super().__init__(name="EmergencyAgent", system_prompt=system_prompt, ollama_url=ollama_url)
 
     async def execute(self, user_query: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info(f"EmergencyAgent processing: '{user_query}'")
+        logger.info("EmergencyAgent processing an emergency request")
 
         prompt = (
             f"Triage the following emergency query from a hospital patient or visitor.\n"

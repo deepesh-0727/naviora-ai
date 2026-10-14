@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api import deps
 from app.db.session import get_db
@@ -22,8 +22,11 @@ router = APIRouter()
 
 class VoiceProcessResponse(BaseModel):
     query: str
+    text: str
     intent: Optional[str] = None
+    entities: dict[str, object] = Field(default_factory=dict)
     response_text: str
+    response_audio_url: Optional[str] = None
     audio_response_b64: Optional[str] = None   # base64-encoded WAV bytes
     analysis: Optional[dict] = None
     session_id: Optional[str] = None
@@ -97,6 +100,8 @@ async def process_voice_command(
             audio_data=audio_bytes,
             session_context=session_context,
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error(f"[Voice/process] Orchestrator failed: {exc}", exc_info=True)
         raise HTTPException(
@@ -117,8 +122,11 @@ async def process_voice_command(
 
     return VoiceProcessResponse(
         query=result.get("query", ""),
+        text=result.get("query", ""),
         intent=result.get("intent"),
+        entities=(result.get("analysis") or {}).get("entities", {}),
         response_text=result.get("response_text", ""),
+        response_audio_url=f"data:audio/wav;base64,{audio_b64}" if audio_b64 else None,
         audio_response_b64=audio_b64,
         analysis=result.get("analysis"),
         session_id=session_id,
@@ -150,11 +158,13 @@ async def process_text_command(
     brain = HospitalBrain()
     session_context = {"session_id": body.session_id or "default", "user_id": current_user.id}
 
-    logger.info(f"[Voice/text] user={current_user.id} query='{body.text[:80]}'")
+    logger.info("[Voice/text] user=%s received a text command", current_user.id)
 
     try:
         analysis = await brain.execute(body.text, session_context)
         response_text = await intent_executor.execute(db, current_user, analysis)
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error(f"[Voice/text] Brain failed: {exc}", exc_info=True)
         raise HTTPException(
@@ -173,8 +183,11 @@ async def process_text_command(
 
     return VoiceProcessResponse(
         query=body.text,
+        text=body.text,
         intent=analysis.get("intent"),
+        entities=analysis.get("entities", {}),
         response_text=response_text,
+        response_audio_url=f"data:audio/wav;base64,{audio_b64}" if audio_b64 else None,
         audio_response_b64=audio_b64,
         analysis=analysis,
         session_id=body.session_id,

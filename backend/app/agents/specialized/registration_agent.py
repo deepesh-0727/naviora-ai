@@ -15,7 +15,7 @@ class RegistrationAgent(BaseAgent):
         super().__init__(name="RegistrationAgent", system_prompt=system_prompt, ollama_url=ollama_url)
 
     async def execute(self, user_query: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info(f"RegistrationAgent processing: '{user_query}'")
+        logger.info("RegistrationAgent processing a request")
 
         prompt = (
             f"Extract registration details from the following query:\n"
@@ -39,12 +39,12 @@ class RegistrationAgent(BaseAgent):
                 return json.loads(response_text[json_start:json_end])
             return json.loads(response_text)
         except Exception as e:
-            logger.warning(f"RegistrationAgent using heuristic extraction: {e}")
+            logger.warning("Registration extraction unavailable: %s", type(e).__name__)
             return {
-                "first_name": "New",
-                "last_name": "Patient",
-                "dob": "1995-01-01",
-                "gender": "other",
-                "blood_group": "O+",
-                "emergency_contact": "+91-9876543210"
+                "first_name": None,
+                "last_name": None,
+                "dob": None,
+                "gender": None,
+                "blood_group": None,
+                "emergency_contact": None,
             }

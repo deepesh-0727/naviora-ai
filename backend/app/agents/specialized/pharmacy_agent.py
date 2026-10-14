@@ -15,7 +15,7 @@ class PharmacyAgent(BaseAgent):
         super().__init__(name="PharmacyAgent", system_prompt=system_prompt, ollama_url=ollama_url)
 
     async def execute(self, user_query: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info(f"PharmacyAgent processing: '{user_query}'")
+        logger.info("PharmacyAgent processing a request")
 
         prompt = (
             f"Extract pharmacy details from the following query:\n"
@@ -37,11 +37,9 @@ class PharmacyAgent(BaseAgent):
                 return json.loads(response_text[json_start:json_end])
             return json.loads(response_text)
         except Exception as e:
-            logger.warning(f"PharmacyAgent using heuristic extraction: {e}")
-            query_lower = user_query.lower()
-            med = "Paracetamol 500mg" if "paracetamol" in query_lower or "fever" in query_lower else ("Amoxicillin 250mg" if "amoxicillin" in query_lower or "antibiotic" in query_lower else ("Cetirizine 10mg" if "allergy" in query_lower or "cold" in query_lower else "Prescribed Medication"))
+            logger.warning("Pharmacy extraction unavailable: %s", type(e).__name__)
             return {
-                "medication_name": med,
-                "query_type": "availability",
-                "quantity": "1 strip"
+                "medication_name": None,
+                "query_type": "unknown",
+                "quantity": None,
             }
