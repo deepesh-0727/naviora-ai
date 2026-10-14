@@ -17,6 +17,31 @@ const ACTIONS: { kind: ActionKind; label: string; path: string }[] = [
   { kind: 'referral', label: 'Create referral', path: '/referrals' },
   { kind: 'admission', label: 'Admit patient', path: '/admissions' },
 ];
+const ACTION_FIELDS: Record<ActionKind, Array<{ key: string; label: string; required: boolean }>> = {
+  prescription: [
+    { key: 'appointment_id', label: 'Appointment ID', required: true },
+    { key: 'medication', label: 'Medication', required: true },
+    { key: 'dosage', label: 'Dosage', required: true },
+    { key: 'frequency', label: 'Frequency', required: true },
+    { key: 'duration', label: 'Duration', required: true },
+    { key: 'instructions', label: 'Instructions (optional)', required: false },
+  ],
+  'lab-order': [
+    { key: 'test_name', label: 'Lab test', required: true },
+    { key: 'category', label: 'Category (optional)', required: false },
+    { key: 'appointment_id', label: 'Appointment ID (optional)', required: false },
+    { key: 'notes', label: 'Notes (optional)', required: false },
+  ],
+  referral: [
+    { key: 'specialty', label: 'Specialty', required: true },
+    { key: 'department_id', label: 'Department ID (optional)', required: false },
+    { key: 'reason', label: 'Referral reason', required: true },
+  ],
+  admission: [
+    { key: 'bed_id', label: 'Bed ID (optional)', required: false },
+    { key: 'reason', label: 'Admission reason', required: true },
+  ],
+};
 
 function entries(value: PatientRecordSection): Array<[string, string]> {
   return Object.entries(value).filter(([, field]) => field === null || ['string', 'number', 'boolean'].includes(typeof field))
@@ -36,7 +61,7 @@ export default function PatientDetail() {
   const { record, loading, error, backendUnavailable, empty, refresh } = usePatientRecord(patientId);
   const [activeTab, setActiveTab] = useState<RecordTab>('Overview');
   const [action, setAction] = useState<ActionKind | null>(null);
-  const [formValue, setFormValue] = useState('');
+  const [formFields, setFormFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -50,8 +75,8 @@ export default function PatientDetail() {
   }, [reload]);
 
   const submitAction = async () => {
-    if (!patientId || !action || !formValue.trim()) {
-      setActionError('Enter the required details before submitting.');
+    if (!patientId || !action || ACTION_FIELDS[action].some((field) => field.required && !formFields[field.key]?.trim())) {
+      setActionError('Enter all required clinical details before submitting.');
       return;
     }
     const actionConfig = ACTIONS.find((item) => item.kind === action);
@@ -60,12 +85,16 @@ export default function PatientDetail() {
     setActionError(null);
     setActionMessage(null);
     try {
-      await apiClient.post(buildApiUrl('doctor', `/patients/${encodeURIComponent(String(patientId))}${actionConfig.path}`), {
-        details: formValue.trim(),
+      const body: Record<string, unknown> = { patient_id: Number(patientId) };
+      ACTION_FIELDS[action].forEach((field) => {
+        const value = formFields[field.key]?.trim();
+        if (!value) return;
+        body[field.key] = field.key.endsWith('_id') ? Number(value) : value;
       });
+      await apiClient.post(buildApiUrl('doctor', actionConfig.path), body);
       setActionMessage(`${actionConfig.label} submitted.`);
       setAction(null);
-      setFormValue('');
+      setFormFields({});
       await refresh();
     } catch (reason: unknown) {
       const status = typeof reason === 'object' && reason !== null && 'response' in reason
@@ -112,7 +141,7 @@ export default function PatientDetail() {
       <Modal visible={action !== null}>
         <Card>
           <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 10 }}>{ACTIONS.find((item) => item.kind === action)?.label ?? 'Patient action'}</Text>
-          <TextInput value={formValue} onChangeText={setFormValue} placeholder="Enter clinical details" multiline style={{ minHeight: 96, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 12, marginBottom: 12 }} />
+          <ScrollView style={{ maxHeight: 300 }}>{action ? ACTION_FIELDS[action].map((field) => <TextInput key={field.key} value={formFields[field.key] ?? ''} onChangeText={(value) => setFormFields((current) => ({ ...current, [field.key]: value }))} placeholder={field.label} keyboardType={field.key.endsWith('_id') ? 'number-pad' : 'default'} multiline={field.key === 'reason' || field.key === 'instructions' || field.key === 'notes'} style={{ minHeight: field.key === 'reason' || field.key === 'instructions' || field.key === 'notes' ? 72 : 44, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 12, marginBottom: 8 }} />) : null}</ScrollView>
           <View style={{ gap: 8 }}>
             <Button title={saving ? 'Submitting…' : 'Submit'} disabled={saving} onPress={() => void submitAction()} />
             <Button title="Cancel" variant="secondary" disabled={saving} onPress={() => setAction(null)} />

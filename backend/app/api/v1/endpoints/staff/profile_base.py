@@ -9,7 +9,7 @@ from app.models.doctor import Doctor
 from app.models.user import User
 
 router = APIRouter()
-STAFF_ROLES = {"doctor", "staff", "nurse", "admin"}
+STAFF_ROLES = {"doctor", "staff", "nurse", "front_desk", "pharmacy", "facilities", "emergency", "admin", "super_admin"}
 
 
 class StaffProfileUpdate(BaseModel):

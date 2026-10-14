@@ -33,6 +33,9 @@ export default function StaffProfile() {
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<'swap' | 'leave' | null>(null);
   const [requestText, setRequestText] = useState('');
+  const [leaveStart, setLeaveStart] = useState('');
+  const [leaveEnd, setLeaveEnd] = useState('');
+  const [leaveReason, setLeaveReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -62,13 +65,16 @@ export default function StaffProfile() {
   useEffect(() => { void refresh(); }, [refresh]);
 
   const submitRequest = async () => {
-    if (!requestText.trim() || !modal) { setActionError('Enter the request details first.'); return; }
+    if (!modal || (modal === 'swap' && !requestText.trim()) || (modal === 'leave' && (!leaveStart.trim() || !leaveEnd.trim() || !leaveReason.trim()))) { setActionError('Enter all required request details first.'); return; }
     setBusy(true); setActionError(null); setActionMessage(null);
     const path = modal === 'swap' ? '/shifts/swap' : '/leave';
     try {
-      await apiClient.post(buildApiUrl('doctor', path), { request: requestText.trim() });
+      const payload = modal === 'swap'
+        ? { request: requestText.trim() }
+        : { start_date: leaveStart.trim(), end_date: leaveEnd.trim(), reason: leaveReason.trim() };
+      await apiClient.post(buildApiUrl('doctor', path), payload);
       setActionMessage(modal === 'swap' ? 'Shift swap request submitted.' : 'Leave request submitted.');
-      setRequestText(''); setModal(null); await refresh();
+      setRequestText(''); setLeaveStart(''); setLeaveEnd(''); setLeaveReason(''); setModal(null); await refresh();
     } catch (reason: unknown) {
       const status = typeof reason === 'object' && reason !== null && 'response' in reason ? (reason as { response?: { status?: number } }).response?.status : undefined;
       setActionError(status === 404 || status === 501 ? `POST /staff${path} is not available on the backend yet.` : 'Could not submit this request.');
@@ -85,5 +91,5 @@ export default function StaffProfile() {
     {shift ? <Card><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Current shift</Text>{values(shift).map(([label, value]) => <Text key={label} style={{ paddingVertical: 4 }}>{label}: {value}</Text>)}</Card> : null}
     <Card><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Attendance</Text>{attendance.length ? attendance.map((entry, index) => <Text key={String(entry.id ?? index)} style={{ paddingVertical: 4 }}>{values(entry).map(([label, value]) => `${label}: ${value}`).join(' · ')}</Text>) : <EmptyState message="No attendance records are available." />}</Card>
     <View style={{ gap: 8 }}><Button title="Request shift swap" onPress={() => { setModal('swap'); setActionError(null); }} /><Button title="Request leave" variant="secondary" onPress={() => { setModal('leave'); setActionError(null); }} /><Button title="Staff settings" variant="secondary" onPress={() => navigation.navigate('StaffSettings')} /><Button title="Refresh profile" variant="secondary" onPress={() => void refresh()} /></View>
-  </ScrollView><Modal visible={modal !== null}><Card><Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>{modal === 'swap' ? 'Shift swap request' : 'Leave request'}</Text><TextInput value={requestText} onChangeText={setRequestText} placeholder={modal === 'swap' ? 'Requested shift and colleague' : 'Dates and reason for leave'} multiline style={{ minHeight: 80, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} /><View style={{ gap: 8 }}><Button title={busy ? 'Submitting…' : 'Submit request'} disabled={busy} onPress={() => void submitRequest()} /><Button title="Cancel" variant="secondary" disabled={busy} onPress={() => setModal(null)} /></View></Card></Modal></ScreenContainer>;
+  </ScrollView><Modal visible={modal !== null}><Card><Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>{modal === 'swap' ? 'Shift swap request' : 'Leave request'}</Text>{modal === 'swap' ? <TextInput value={requestText} onChangeText={setRequestText} placeholder="Requested shift and colleague" multiline style={{ minHeight: 80, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} /> : <><TextInput value={leaveStart} onChangeText={setLeaveStart} placeholder="Start date (YYYY-MM-DD)" style={{ borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} /><TextInput value={leaveEnd} onChangeText={setLeaveEnd} placeholder="End date (YYYY-MM-DD)" style={{ borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} /><TextInput value={leaveReason} onChangeText={setLeaveReason} placeholder="Reason for leave" multiline style={{ minHeight: 60, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} /></>}<View style={{ gap: 8 }}><Button title={busy ? 'Submitting…' : 'Submit request'} disabled={busy} onPress={() => void submitRequest()} /><Button title="Cancel" variant="secondary" disabled={busy} onPress={() => setModal(null)} /></View></Card></Modal></ScreenContainer>;
 }

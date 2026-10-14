@@ -18,6 +18,8 @@ class EmergencyCase(Base):
     assigned_staff: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True) # list of staff names/IDs
     ambulance_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     response_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True) # in seconds
+    acknowledged_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
+    en_route_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     arrival_time: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
     treatment_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)

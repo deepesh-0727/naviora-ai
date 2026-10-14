@@ -17,6 +17,26 @@ from .billing import Billing
 from .security import RefreshToken
 from .queue import QueueEntry
 from .bed import Bed
+from .operations import (
+    Admission,
+    BillingRefund,
+    DepartmentWaypoint,
+    Equipment,
+    EmergencyMessage,
+    LabOrder,
+    MaintenanceRequest,
+    MedicationAdministration,
+    NurseHandover,
+    OperatingRoom,
+    OperatingRoomBooking,
+    Referral,
+    RegisteredDevice,
+    StaffLeave,
+    StaffAttendance,
+    StaffShiftSwap,
+    StaffSetting,
+    SystemSetting,
+)
 
 __all__ = [
     "User",
@@ -38,4 +58,22 @@ __all__ = [
     "RefreshToken",
     "QueueEntry",
     "Bed",
+    "LabOrder",
+    "MaintenanceRequest",
+    "MedicationAdministration",
+    "NurseHandover",
+    "Referral",
+    "Admission",
+    "BillingRefund",
+    "Equipment",
+    "EmergencyMessage",
+    "OperatingRoom",
+    "OperatingRoomBooking",
+    "StaffLeave",
+    "StaffAttendance",
+    "StaffShiftSwap",
+    "StaffSetting",
+    "RegisteredDevice",
+    "DepartmentWaypoint",
+    "SystemSetting",
 ]

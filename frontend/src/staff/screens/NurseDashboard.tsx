@@ -79,7 +79,7 @@ export default function NurseDashboard() {
     const endpoint = kind === 'vitals' ? '/nurse/vitals' : kind === 'medication' ? '/nurse/medications/record' : '/nurse/handover';
     const payload: Record<string, unknown> = kind === 'vitals'
       ? { patient_id: Number(patientId), blood_pressure_systolic: Number(systolic), blood_pressure_diastolic: Number(diastolic), heart_rate: Number(heartRate), temperature: Number(temperature), spo2: Number(spo2), notes: notes.trim() }
-      : { patient_id: patientId.trim() ? Number(patientId) : undefined, details: notes.trim() };
+      : { patient_id: patientId.trim() ? Number(patientId) : undefined, details: notes.trim(), ward_id: wardId ?? undefined };
     try {
       await apiClient.post(buildApiUrl('nurse', endpoint), payload);
       setActionMessage(`${kind === 'vitals' ? 'Vitals' : kind === 'medication' ? 'Medication' : 'Handover'} record submitted.`);
