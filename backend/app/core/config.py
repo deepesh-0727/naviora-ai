@@ -3,7 +3,7 @@ from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import BeforeValidator, model_validator
 from typing_extensions import Annotated
-
+from typing import Optional
 
 def any_http_url_list_validator(v: str | List[str]) -> List[str]:
     if isinstance(v, str):
@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     # Security
     # =========================================================
     ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
+    BACKUP_ENCRYPTION_KEY: Optional[str] = None
     ALLOWED_HOSTS: List[str] = [
         "naviora-backend.onrender.com",
         "naviora-backend-s6je.onrender.com",
