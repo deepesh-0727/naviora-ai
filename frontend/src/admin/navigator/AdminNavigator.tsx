@@ -1,32 +1,32 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createDrawerNavigator } from '@react-navigation/drawer';
+import { RoleGuard } from '../../shared/guards/RoleGuard';
+import AdminDashboard from '../screens/AdminDashboard';
+import UserManagement from '../screens/UserManagement';
+import AuditLog from '../screens/AuditLog';
+import DepartmentManagement from '../screens/DepartmentManagement';
+import ResourceManagement from '../screens/ResourceManagement';
+import Analytics from '../screens/Analytics';
+import Billing from '../screens/Billing';
+import SystemHealth from '../screens/SystemHealth';
+import Settings from '../screens/Settings';
 
-import AdminDashboardScreen from '../../screens/admin/Dashboard';
-import StaffManagementScreen from '../../screens/admin/StaffManagement';
-import DepartmentsScreen from '../../screens/admin/Departments';
-import AdminAnalyticsScreen from '../../screens/admin/Analytics';
-import AuditLogsScreen from '../../screens/admin/AuditLogs';
+const Drawer = createDrawerNavigator();
 
-const Tab = createBottomTabNavigator();
-const Stack = createStackNavigator();
-
-function AdminTabs() {
-  return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Dashboard" component={AdminDashboardScreen} />
-      <Tab.Screen name="Users" component={StaffManagementScreen} />
-      <Tab.Screen name="Departments" component={DepartmentsScreen} />
-      <Tab.Screen name="Analytics" component={AdminAnalyticsScreen} />
-    </Tab.Navigator>
-  );
+function AdminDrawer() {
+  return <Drawer.Navigator screenOptions={{ headerTitleAlign: 'center' }}>
+    <Drawer.Screen name="Dashboard" component={AdminDashboard} />
+    <Drawer.Screen name="Users" component={UserManagement} />
+    <Drawer.Screen name="Audit Log" component={AuditLog} />
+    <Drawer.Screen name="Departments" component={DepartmentManagement} />
+    <Drawer.Screen name="Resources" component={ResourceManagement} />
+    <Drawer.Screen name="Analytics" component={Analytics} />
+    <Drawer.Screen name="Billing" component={Billing} />
+    <Drawer.Screen name="System Health" component={SystemHealth} />
+    <Drawer.Screen name="Settings" component={Settings} />
+  </Drawer.Navigator>;
 }
 
 export default function AdminNavigator() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="AdminTabs" component={AdminTabs} />
-      <Stack.Screen name="AuditLogs" component={AuditLogsScreen} />
-    </Stack.Navigator>
-  );
+  return <RoleGuard allow={['admin', 'super_admin']}><AdminDrawer /></RoleGuard>;
 }

@@ -19,6 +19,7 @@ import SettingsScreen from '../screens/Settings';
 import TelehealthScreen from '../screens/Telehealth';
 import PharmacyScreen from '../screens/Pharmacy';
 import BillingScreen from '../screens/BillingScreen';
+import AdminNavigator from '../admin/navigator/AdminNavigator';
 
 // Doctor Screens
 import DoctorDashboardScreen from '../screens/doctor/Dashboard';
@@ -263,13 +264,7 @@ function NurseZone() {
 }
 
 function AdminZone() {
-  return (
-    <Stack.Navigator initialRouteName="AdminMain" screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="AdminMain" component={AdminTabs} />
-      <Stack.Screen name="Inventory" component={InventoryScreen} />
-      <Stack.Screen name="AuditLogs" component={AuditLogsScreen} />
-    </Stack.Navigator>
-  );
+  return <AdminNavigator />;
 }
 
 export default function RoleBasedNavigator() {
@@ -282,6 +277,7 @@ export default function RoleBasedNavigator() {
     case 'staff':
       return <NurseZone />;
     case 'admin':
+    case 'super_admin':
       return <AdminZone />;
     case 'patient':
     default:

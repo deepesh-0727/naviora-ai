@@ -8,6 +8,7 @@ import { useRole } from '../shared/contexts/RoleContext';
 import type { Role } from '../shared/types/roles';
 
 const STAFF_ROLES: Role[] = ['doctor', 'nurse', 'front_desk', 'pharmacy', 'facilities', 'emergency'];
+const CONTEXT_ROLES: Role[] = [...STAFF_ROLES, 'admin', 'super_admin'];
 
 /** Keep the signed-in role synchronized with the shared API/session context. */
 export default function PatientRoleNavigator() {
@@ -15,7 +16,7 @@ export default function PatientRoleNavigator() {
   const { role, login } = useRole();
 
   useEffect(() => {
-    if (!user?.token || !STAFF_ROLES.includes(user.role as Role) || role === user.role) return;
+    if (!user?.token || !CONTEXT_ROLES.includes(user.role as Role) || role === user.role) return;
     let cancelled = false;
     void AsyncStorage.getItem('refresh_token').then((refreshToken) => {
       if (cancelled) return;
