@@ -9,18 +9,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
-# Health check (smoke test — always runs first)
+# Liveness check (smoke test — always runs first)
 # ---------------------------------------------------------------------------
 
 def test_health_check(client):
     response = client.get("/health")
-    body = response.json()
-    assert response.status_code in {200, 503}
-    assert body["status"] in {"healthy", "degraded"}
-    assert set(body["services"]) == {"database", "redis"}
-    assert (body["status"] == "healthy") == all(
-        value == "reachable" for value in body["services"].values()
-    )
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
 
 
 # ---------------------------------------------------------------------------

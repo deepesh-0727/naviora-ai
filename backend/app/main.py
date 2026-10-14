@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi.errors import RateLimitExceeded
@@ -26,6 +26,7 @@ from app.core.exceptions import (
     sqlalchemy_exception_handler,
 )
 from app.api.v1.router import api_router
+from app.api.v1.endpoints.health import router as health_router
 from app.db.init_db import init_db
 from app.db.session import SessionLocal
 from app.models.user import User
@@ -176,35 +177,7 @@ app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
 # =========================================================
 # SYSTEM ROUTES (declared BEFORE include_router)
 # =========================================================
-@app.get("/health", tags=["system"])
-async def health_check():
-    """Report live database and Redis connectivity for load balancers."""
-    from redis.asyncio import Redis
-
-    services: dict[str, str] = {}
-    try:
-        async with SessionLocal() as db:
-            await db.execute(text("SELECT 1"))
-        services["database"] = "reachable"
-    except Exception:
-        logger.exception("Health check could not reach PostgreSQL")
-        services["database"] = "unreachable"
-
-    redis = Redis.from_url(settings.REDIS_URL)
-    try:
-        await redis.ping()
-        services["redis"] = "reachable"
-    except Exception:
-        logger.exception("Health check could not reach Redis")
-        services["redis"] = "unreachable"
-    finally:
-        await redis.aclose()
-
-    healthy = all(value == "reachable" for value in services.values())
-    return JSONResponse(
-        status_code=200 if healthy else 503,
-        content={"status": "healthy" if healthy else "degraded", "services": services},
-    )
+app.include_router(health_router)
 
 
 @app.head("/")
