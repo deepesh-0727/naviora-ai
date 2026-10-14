@@ -33,6 +33,8 @@ from app.models.user import User
 from app.core.monitoring import PrometheusMetricsMiddleware
 from app.core.sentry import init_sentry
 from app.middleware.audit import AuditMiddleware
+from app.middleware.request_id import RequestIDMiddleware
+from app.core.logging import user_id_context
 from app.core.rate_limiter import limiter
 from app.services.ws_manager import ws_manager
 
@@ -135,6 +137,7 @@ async def enforce_api_identity_and_role_boundaries(request: Request, call_next):
         return JSONResponse(status_code=403, content={"detail": "Token role no longer matches the account."})
 
     request.state.auth_claims = claims
+    user_id_context.set(str(subject))
     if path.startswith("/api/v1/admin") and role not in ADMIN_ROLES:
         return JSONResponse(status_code=403, content={"detail": "Administrator role required."})
     if path.startswith("/api/v1/staff") and role not in STAFF_ROLES | ADMIN_ROLES:
@@ -162,6 +165,7 @@ app.add_middleware(
     expose_headers=["X-Request-ID", "X-Process-Time-MS"],
 )
 app.add_middleware(AuditMiddleware)
+app.add_middleware(RequestIDMiddleware)
 
 # Prometheus /metrics endpoint
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")

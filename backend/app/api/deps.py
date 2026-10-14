@@ -9,6 +9,7 @@ from sqlalchemy.future import select
 
 from app.core import security
 from app.core.config import settings
+from app.core.logging import user_id_context
 from app.db.session import SessionLocal
 from app.models.user import User
 
@@ -53,6 +54,7 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Token role is missing or no longer matches the account role.",
         )
+    user_id_context.set(str(user.id))
     return user
 
 def get_current_active_user(

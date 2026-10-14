@@ -1,5 +1,4 @@
 import time
-import uuid
 import logging
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -16,23 +15,24 @@ class EnterpriseMiddleware(BaseHTTPMiddleware):
     4. Structured Logging
     """
     async def dispatch(self, request: Request, call_next):
-        request_id = str(uuid.uuid4())
-        # Attach request_id to request state for use in logs/services
-        request.state.request_id = request_id
+        request_id = getattr(request.state, "request_id", "unknown")
 
         start_time = time.time()
 
         # Log incoming request
         logger.info(
-            f"Incoming Request: {request.method} {request.url.path} "
-            f"[RID: {request_id}] client={request.client.host if request.client else 'unknown'}"
+            "Incoming Request: %s %s [RID: %s] client=%s",
+            request.method,
+            request.url.path,
+            request_id,
+            request.client.host if request.client else "unknown",
         )
 
         try:
             response: Response = await call_next(request)
-        except Exception as e:
-            logger.error(f"Unhandled Exception [RID: {request_id}]: {str(e)}", exc_info=True)
-            raise e
+        except Exception:
+            logger.exception("Unhandled request exception [RID: %s]", request_id)
+            raise
 
         process_time = (time.time() - start_time) * 1000
 
@@ -53,8 +53,12 @@ class EnterpriseMiddleware(BaseHTTPMiddleware):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
         logger.info(
-            f"Completed Request: {request.method} {request.url.path} "
-            f"[RID: {request_id}] status={response.status_code} time={process_time:.2f}ms"
+            "Completed Request: %s %s [RID: %s] status=%s time=%.2fms",
+            request.method,
+            request.url.path,
+            request_id,
+            response.status_code,
+            process_time,
         )
 
         return response
