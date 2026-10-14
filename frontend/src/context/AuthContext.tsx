@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '../services/api';
 
-export type UserRole = 'patient' | 'doctor' | 'nurse' | 'staff' | 'admin';
+export type UserRole = 'patient' | 'doctor' | 'nurse' | 'front_desk' | 'pharmacy' | 'facilities' | 'emergency' | 'staff' | 'admin';
 export type LoginZone = 'patient' | 'staff' | 'admin';
 
 export interface AuthUser {
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ? role === 'patient'
       : zone === 'admin'
         ? role === 'admin'
-        : role === 'doctor' || role === 'nurse' || role === 'staff';
+        : role === 'doctor' || role === 'nurse' || role === 'front_desk' || role === 'pharmacy' || role === 'facilities' || role === 'emergency' || role === 'staff';
     if (!role || !roleMatchesZone) {
       await AsyncStorage.multiRemove(['access_token', 'refresh_token']);
       return {
@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 function normalizeRole(role: unknown): UserRole | null {
-  if (role === 'doctor' || role === 'nurse' || role === 'staff' || role === 'admin') {
+  if (role === 'doctor' || role === 'nurse' || role === 'front_desk' || role === 'pharmacy' || role === 'facilities' || role === 'emergency' || role === 'staff' || role === 'admin') {
     return role;
   }
   if (role === 'patient') return 'patient';
