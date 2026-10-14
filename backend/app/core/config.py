@@ -1,7 +1,7 @@
 import os
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import BeforeValidator
+from pydantic import BeforeValidator, model_validator
 from typing_extensions import Annotated
 
 
@@ -16,7 +16,7 @@ def any_http_url_list_validator(v: str | List[str]) -> List[str]:
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Naviora AI"
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = "super-secret-key-change-in-production"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440   # 24 hours
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 10080 # 7 days
 
@@ -29,10 +29,7 @@ class Settings(BaseSettings):
     # DATABASE — Supabase Session Pooler (IPv4 compatible)
     # Uses asyncpg driver for FastAPI + Alembic async engine
     # =========================================================
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql+asyncpg://postgres.grcudjazfyfhjibjlrrj:NAVIORA%402026@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
-    )
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
     # Supabase specific keys
     SUPABASE_URL: str = ""
@@ -52,6 +49,9 @@ class Settings(BaseSettings):
     SMS_API_KEY: str = os.getenv("SMS_API_KEY", "")
     TEXTLOCAL_API_KEY: str = os.getenv("SMS_API_KEY", "")
     SMS_SENDER: str = "NAVIORA"
+    TWILIO_SID: str = os.getenv("TWILIO_SID", "")
+    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    TWILIO_PHONE_NUMBER: str = os.getenv("TWILIO_PHONE_NUMBER", "")
     EMAIL_API_KEY: str = os.getenv("EMAIL_API_KEY", "")
     SENDGRID_API_KEY: str = os.getenv("EMAIL_API_KEY", "")
     EMAIL_FROM: str = "noreply@naviora.ai"
@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     # =========================================================
     # Security
     # =========================================================
+    ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
     ALLOWED_HOSTS: List[str] = [
         "naviora-backend.onrender.com",
         "naviora-backend-s6je.onrender.com",
@@ -111,6 +112,16 @@ class Settings(BaseSettings):
     # Monitoring
     # =========================================================
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
+
+    @model_validator(mode="after")
+    def validate_required_secrets(self) -> "Settings":
+        if len(self.SECRET_KEY) < 32:
+            raise ValueError("SECRET_KEY must contain at least 32 characters.")
+        if not self.DATABASE_URL:
+            raise ValueError("DATABASE_URL must be configured.")
+        if not self.ENCRYPTION_KEY:
+            raise ValueError("ENCRYPTION_KEY must be configured for patient PII encryption.")
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env",

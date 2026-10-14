@@ -1,26 +1,68 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 import jwt
 import secrets
 import hashlib
+from datetime import datetime, timedelta, timezone
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from pydantic import BaseModel, Field
 from sqlalchemy.future import select
+from sqlalchemy import update
 
 from app.core import security
 from app.core.config import settings
 from app.db.session import get_db
 from app.schemas.auth import Token, UserRegister, OTPVerification
 from app.models.user import User
+from app.models.patient import Patient
+from app.models.doctor import Doctor
+from app.models.security import RefreshToken
 from app.services.auth_service import auth_service
-from app.services.notification.sms_service import sms_service
 from app.services.notification.email_service import email_service
+from app.services.otp_service import otp_service
+from app.core.rate_limiter import limiter
 from app.api import deps
 
 router = APIRouter()
-OTP_TTL_SECONDS = 300
+
+
+async def _token_claims_for_user(db: AsyncSession, user: User) -> dict[str, int | str | None]:
+    """Build authorization context from persisted account/profile rows."""
+    claims: dict[str, int | str | None] = {
+        "role": user.role,
+        "patient_id": None,
+        "staff_id": None,
+        "department_id": None,
+        "ward_id": None,
+        "admin_level": None,
+    }
+    if user.role == "patient":
+        result = await db.execute(select(Patient.id).where(Patient.user_id == user.id))
+        claims["patient_id"] = result.scalar_one_or_none()
+    elif user.role == "doctor":
+        result = await db.execute(
+            select(Doctor.id, Doctor.department_id).where(Doctor.user_id == user.id)
+        )
+        doctor = result.one_or_none()
+        if doctor:
+            claims["staff_id"] = doctor.id
+            claims["department_id"] = doctor.department_id
+    elif user.role in {"nurse", "front_desk", "pharmacy", "facilities", "emergency", "staff"}:
+        claims["staff_id"] = user.id
+    return claims
+
+
+def _refresh_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def _store_refresh_token(db: AsyncSession, user_id: int, token: str) -> None:
+    expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
+        minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES
+    )
+    db.add(RefreshToken(user_id=user_id, token_hash=_refresh_token_hash(token), expires_at=expires_at))
 
 class UserProfileUpdate(BaseModel):
     phone: str = Field(min_length=1, max_length=20)
@@ -54,10 +96,6 @@ async def update_current_user(
     return {"id": current_user.id, "phone": current_user.phone, "email": current_user.email}
 
 
-def _otp_key(phone: str) -> str:
-    phone_hash = hashlib.sha256(phone.encode("utf-8")).hexdigest()
-    return f"naviora:otp:{phone_hash}"
-
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
     """
@@ -81,7 +119,8 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
     return {"message": "User registered successfully", "phone": user.phone}
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     """
     Login with email or phone number and password
     """
@@ -92,8 +131,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
             detail="Incorrect email/phone number or password."
         )
     
-    access_token = security.create_access_token(subject=user.id)
-    refresh_token = security.create_refresh_token(subject=user.id)
+    token_claims = await _token_claims_for_user(db, user)
+    access_token = security.create_access_token(subject=user.id, claims=token_claims)
+    refresh_token = security.create_refresh_token(subject=user.id, claims=token_claims)
+    await _store_refresh_token(db, user.id, refresh_token)
+    await db.commit()
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -101,46 +143,33 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     }
 
 @router.post("/otp/generate")
-async def generate_otp(phone: str):
+async def generate_otp(phone: str, db: AsyncSession = Depends(get_db)):
     """
     Generate OTP for validation
     """
-    code = f"{secrets.randbelow(1_000_000):06d}"
-    redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
-    try:
-        await redis.set(_otp_key(phone), code, ex=OTP_TTL_SECONDS)
-        delivered = await sms_service.send_otp(phone, code)
-        if not delivered:
-            await redis.delete(_otp_key(phone))
-            raise HTTPException(status_code=503, detail="Unable to send OTP.")
-    except RedisError as exc:
-        raise HTTPException(status_code=503, detail="OTP service is unavailable.") from exc
-    finally:
-        await redis.aclose()
-    return {"message": "OTP sent successfully", "phone": phone, "expires_in_seconds": 300}
+    normalized_phone = phone.strip()
+    user_result = await db.execute(select(User.role).where(User.phone == normalized_phone))
+    role = user_result.scalar_one_or_none() or "patient"
+    ttl = await otp_service.generate(normalized_phone, role)
+    return {"message": "OTP sent successfully", "phone": normalized_phone, "expires_in_seconds": ttl}
 
 @router.post("/otp/verify")
 async def verify_otp(verification: OTPVerification):
     """
     Verify OTP for verification
     """
-    redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
-    try:
-        stored = await redis.get(_otp_key(verification.phone))
-        if stored and secrets.compare_digest(verification.code, stored):
-            await redis.delete(_otp_key(verification.phone))
-            return {"message": "OTP verified successfully"}
-    except RedisError as exc:
-        raise HTTPException(status_code=503, detail="OTP service is unavailable.") from exc
-    finally:
-        await redis.aclose()
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Invalid OTP verification code."
-    )
+    result = await otp_service.verify(verification.phone.strip(), verification.code)
+    if result == "verified":
+        return {"message": "OTP verified successfully"}
+    if result == "locked":
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many invalid OTP attempts. Try again in 15 minutes.",
+        )
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP verification code.")
 
 @router.post("/refresh", response_model=Token)
-async def refresh_token(refresh_token: str):
+async def refresh_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
     """
     Refresh JWT token
     """
@@ -155,8 +184,29 @@ async def refresh_token(refresh_token: str):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid refresh token")
 
-    access_token = security.create_access_token(subject=user_id)
-    new_refresh_token = security.create_refresh_token(subject=user_id)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    token_result = await db.execute(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == _refresh_token_hash(refresh_token),
+            RefreshToken.user_id == int(user_id),
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > now,
+        )
+    )
+    stored_token = token_result.scalar_one_or_none()
+    if stored_token is None:
+        raise HTTPException(status_code=401, detail="Refresh token is invalid or expired.")
+
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="Account is unavailable.")
+    token_claims = await _token_claims_for_user(db, user)
+    access_token = security.create_access_token(subject=user.id, claims=token_claims)
+    new_refresh_token = security.create_refresh_token(subject=user.id, claims=token_claims)
+    stored_token.revoked_at = now
+    await _store_refresh_token(db, user.id, new_refresh_token)
+    await db.commit()
     return {
         "access_token": access_token,
         "refresh_token": new_refresh_token,
@@ -164,10 +214,19 @@ async def refresh_token(refresh_token: str):
     }
 
 @router.post("/logout")
-async def logout():
+async def logout(
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Logout user (client-side token deletion, server-side blacklisting stub)
+    Revoke all outstanding refresh tokens for the authenticated account.
     """
+    await db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == current_user.id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(timezone.utc).replace(tzinfo=None))
+    )
+    await db.commit()
     return {"message": "Logged out successfully"}
 
 @router.post("/forgot-password")

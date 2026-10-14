@@ -5,8 +5,15 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from jose import JWTError, jwt
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from prometheus_fastapi_instrumentator import Instrumentator
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from redis.exceptions import RedisError
 
 from app.core.config import settings
 from app.core.logging import setup_logging
@@ -20,8 +27,11 @@ from app.core.exceptions import (
 from app.api.v1.router import api_router
 from app.db.init_db import init_db
 from app.db.session import SessionLocal
+from app.models.user import User
 from app.core.monitoring import PrometheusMetricsMiddleware
 from app.core.sentry import init_sentry
+from app.middleware.audit import AuditMiddleware
+from app.core.rate_limiter import limiter
 
 # =========================================================
 # INIT: Logging, Error Tracking, App
@@ -38,6 +48,84 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+app.state.rbac_session_factory = SessionLocal
+app.state.audit_session_factory = SessionLocal
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+async def redis_unavailable_handler(request: Request, exc: RedisError) -> JSONResponse:
+    logger.exception("Redis request dependency failed", exc_info=exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Redis-backed service is unavailable."},
+    )
+
+
+app.add_exception_handler(RedisError, redis_unavailable_handler)
+
+PUBLIC_API_PATHS = {
+    "/api/v1/auth/login",
+    "/api/v1/auth/register",
+    "/api/v1/auth/otp/generate",
+    "/api/v1/auth/otp/verify",
+    "/api/v1/auth/refresh",
+    "/api/v1/auth/forgot-password",
+    "/api/v1/auth/reset-password",
+}
+STAFF_ROLES = {"doctor", "nurse", "front_desk", "pharmacy", "facilities", "emergency", "staff"}
+ADMIN_ROLES = {"admin", "super_admin"}
+
+
+@app.middleware("http")
+async def enforce_api_identity_and_role_boundaries(request: Request, call_next):
+    """Require an access token on API routes and enforce staff/admin namespaces."""
+    path = request.url.path.rstrip("/") or "/"
+    if (
+        not path.startswith("/api/v1/")
+        or path in PUBLIC_API_PATHS
+        or path == "/api/v1/health"
+        or request.method == "OPTIONS"
+    ):
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization", "")
+    scheme, _, token = auth_header.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        return JSONResponse(status_code=401, content={"detail": "Authentication required."})
+
+    try:
+        claims = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+    except JWTError:
+        return JSONResponse(status_code=401, content={"detail": "Invalid or expired access token."})
+
+    role = claims.get("role")
+    subject = claims.get("sub")
+    if claims.get("type") != "access" or not isinstance(role, str) or not subject:
+        return JSONResponse(status_code=401, content={"detail": "Access token role is missing."})
+
+    try:
+        async with request.app.state.rbac_session_factory() as db:
+            result = await db.execute(select(User).where(User.id == int(subject)))
+            user = result.scalar_one_or_none()
+    except (ValueError, TypeError):
+        return JSONResponse(status_code=401, content={"detail": "Invalid access token subject."})
+    except Exception:
+        logger.exception("Unable to verify API account status")
+        return JSONResponse(status_code=503, content={"detail": "Authentication service unavailable."})
+
+    if user is None or not user.is_active:
+        return JSONResponse(status_code=401, content={"detail": "Account is unavailable."})
+    if user.role != role:
+        return JSONResponse(status_code=403, content={"detail": "Token role no longer matches the account."})
+
+    request.state.auth_claims = claims
+    if path.startswith("/api/v1/admin") and role not in ADMIN_ROLES:
+        return JSONResponse(status_code=403, content={"detail": "Administrator role required."})
+    if path.startswith("/api/v1/staff") and role not in STAFF_ROLES | ADMIN_ROLES:
+        return JSONResponse(status_code=403, content={"detail": "Staff role required."})
+
+    return await call_next(request)
 
 # =========================================================
 # MIDDLEWARE STACK
@@ -58,6 +146,7 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Request-ID", "X-Process-Time-MS"],
 )
+app.add_middleware(AuditMiddleware)
 
 # Prometheus /metrics endpoint
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
@@ -75,19 +164,33 @@ app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
 # =========================================================
 @app.get("/health", tags=["system"])
 async def health_check():
-    """
-    Health endpoint used by Render load balancer and UptimeRobot.
-    """
-    return {
-        "status": "online",
-        "orchestrator": "active",
-        "version": "1.0.0",
-        "telemetry": {
-            "uptime_check": "passed",
-            "db_link": "connected",
-            "ai_node": "reachable",
-        },
-    }
+    """Report live database and Redis connectivity for load balancers."""
+    from redis.asyncio import Redis
+
+    services: dict[str, str] = {}
+    try:
+        async with SessionLocal() as db:
+            await db.execute(text("SELECT 1"))
+        services["database"] = "reachable"
+    except Exception:
+        logger.exception("Health check could not reach PostgreSQL")
+        services["database"] = "unreachable"
+
+    redis = Redis.from_url(settings.REDIS_URL)
+    try:
+        await redis.ping()
+        services["redis"] = "reachable"
+    except Exception:
+        logger.exception("Health check could not reach Redis")
+        services["redis"] = "unreachable"
+    finally:
+        await redis.aclose()
+
+    healthy = all(value == "reachable" for value in services.values())
+    return JSONResponse(
+        status_code=200 if healthy else 503,
+        content={"status": "healthy" if healthy else "degraded", "services": services},
+    )
 
 
 @app.head("/")
@@ -113,7 +216,7 @@ async def root():
                 <div style="background:#161B2C;padding:40px;border-radius:24px;border:1px solid #23293E;text-align:center;max-width:520px;">
                     <h1 style="color:#0EA5E9;letter-spacing:2px;margin:0 0 10px;">NAVIORA AI</h1>
                     <p style="margin:0 0 20px;">Enterprise Clinical Orchestration Platform</p>
-                    <div style="color:#34D399;font-weight:bold;margin:20px 0;">&#9679; SYSTEM LIVE &amp; CLOUD CONNECTED</div>
+                    <div style="color:#94A3B8;font-weight:bold;margin:20px 0;">API documentation and service health</div>
                     <p style="color:#94A3B8;margin:10px 0;">Version 1.0.0 | Production Environment</p>
                     <a href="/docs" style="display:inline-block;background:#0EA5E9;color:white;padding:12px 24px;border-radius:12px;text-decoration:none;font-weight:bold;margin-top:20px;">Explore API Endpoints</a>
                     <div style="margin-top:16px;font-size:13px;">
@@ -142,7 +245,7 @@ async def on_startup():
     try:
         async with SessionLocal() as db:
             await init_db(db)
-            logger.info("Clinical Database Seeded Successfully")
+            logger.info("Clinical Database Connection Verified")
     except Exception as e:
         logger.warning(f"Database link deferred or unreachable: {e}")
 

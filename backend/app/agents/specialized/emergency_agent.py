@@ -1,5 +1,6 @@
 import logging
 import json
+from fastapi import HTTPException
 from typing import Dict, Any
 from ..base_agent import BaseAgent
 
@@ -43,12 +44,8 @@ class EmergencyAgent(BaseAgent):
                 return json.loads(response_text[json_start:json_end])
             return json.loads(response_text)
         except Exception as e:
-            logger.warning(f"EmergencyAgent using local heuristic triage: {e}")
-            query_lower = user_query.lower()
-            severity = 1 if any(k in query_lower for k in ["cardiac", "stroke", "bleed", "breath", "unconscious", "chest pain"]) else (3 if any(k in query_lower for k in ["pain", "fall", "distress", "broken"]) else 4)
-            return {
-                "emergency_type": "Critical Distress" if severity == 1 else "Urgent Medical Assistance",
-                "severity": severity,
-                "location_clues": context.get("location") or "Reported Scene",
-                "immediate_action_required": "Emergency medical team dispatched. Keep patient calm."
-            }
+            logger.exception("Emergency triage model is unavailable")
+            raise HTTPException(
+                status_code=503,
+                detail="Emergency triage is unavailable. Contact emergency services directly.",
+            ) from e

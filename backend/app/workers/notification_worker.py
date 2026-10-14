@@ -2,7 +2,6 @@ import asyncio
 import logging
 import httpx
 from typing import Dict, Any, Optional
-from datetime import datetime
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -32,7 +31,7 @@ class NotificationWorker:
             try:
                 logger.info(f"SMS Dispatch [Attempt {attempt+1}]: target={phone}")
                 if not settings.TEXTLOCAL_API_KEY:
-                    logger.error("SMS provider is not configured; refusing simulated delivery")
+                    logger.error("SMS provider is not configured; delivery was not attempted")
                     return False
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     response = await client.post("https://api.textlocal.in/send", data=payload)
@@ -52,7 +51,7 @@ class NotificationWorker:
         Sends HTML formatted clinical reports or confirmations.
         """
         if not settings.SENDGRID_API_KEY or not settings.EMAIL_FROM:
-            logger.error("Email provider is not configured; refusing simulated delivery")
+            logger.error("Email provider is not configured; delivery was not attempted")
             return False
         payload = {
             "personalizations": [{"to": [{"email": email}], "subject": subject}],
@@ -69,16 +68,6 @@ class NotificationWorker:
         return True
 
     async def generate_patient_report(self, patient_id: int, data: Dict[str, Any]):
-        """
-        Asynchronously generates complex PDF reports and stores them in Supabase.
-        """
-        start_time = datetime.now()
-        logger.info(f"Report Generation Started: patient={patient_id}")
-
-        # CPU-intensive simulation
-        await asyncio.sleep(3.0)
-
-        duration = (datetime.now() - start_time).total_seconds()
-        logger.info(f"Report Ready: patient={patient_id} | Time: {duration}s | Status: Uploaded")
+        raise NotImplementedError("Patient report generation and storage are not implemented.")
 
 worker = NotificationWorker()

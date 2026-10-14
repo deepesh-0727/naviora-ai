@@ -30,6 +30,10 @@ async def queue_status(
         doctor_id = doctor.id
     elif current_user.role not in {"nurse", "staff", "admin"}:
         raise HTTPException(status_code=403, detail="You are not authorized to view the clinical queue.")
+    if doctor_id is not None:
+        queue_items = await queue_service.get_queue_status(db, doctor_id)
+        return {"items": queue_items}
+
     query = select(Appointment).where(
         Appointment.status.in_(["check_in", "treating"]),
         Appointment.queue_position > 0,
@@ -72,8 +76,8 @@ async def complete_queue_item(
         doctor = doctor_result.scalars().first()
         if not doctor or appointment.doctor_id != doctor.id:
             raise HTTPException(status_code=403, detail="You can only complete your own queue appointments.")
-    appointment.status = "completed"
-    await db.commit()
+    if not await queue_service.mark_served(db, appointment.id, appointment.doctor_id):
+        raise HTTPException(status_code=409, detail="Queue entry could not be completed.")
     await db.refresh(appointment)
     return appointment
 

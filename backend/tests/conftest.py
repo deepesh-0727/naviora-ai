@@ -7,7 +7,6 @@ Key design decisions:
 - Patches Redis calls to avoid needing a live Redis server in CI.
 - Provides a synchronous TestClient and async client fixture.
 """
-import asyncio
 import os
 from typing import AsyncGenerator
 
@@ -19,15 +18,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.pool import StaticPool
 
 # ── Force environment to test values BEFORE importing the app ──────────────
-os.environ.setdefault("SECRET_KEY", "test-secret-key-naviora-ci-only")
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("TEXTLOCAL_API_KEY", "")
-os.environ.setdefault("EMAIL_API_KEY", "")
-os.environ.setdefault("FIREBASE_CREDENTIALS", "")
-os.environ.setdefault("RAZORPAY_KEY_ID", "")
-os.environ.setdefault("RAZORPAY_KEY_SECRET", "")
-os.environ.setdefault("SENTRY_DSN", "")
+os.environ["SECRET_KEY"] = "test-secret-key-naviora-ci-only-32"
+os.environ["ENCRYPTION_KEY"] = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+os.environ["REDIS_URL"] = "redis://localhost:6379/0"
+os.environ["TEXTLOCAL_API_KEY"] = ""
+os.environ["EMAIL_API_KEY"] = ""
+os.environ["FIREBASE_CREDENTIALS"] = ""
+os.environ["RAZORPAY_KEY_ID"] = ""
+os.environ["RAZORPAY_KEY_SECRET"] = ""
+os.environ["SENTRY_DSN"] = ""
 
 from app.main import app                          # noqa: E402 — env must be set first
 from app.db.session import get_db                 # noqa: E402
@@ -51,27 +51,25 @@ _TestingSessionLocal = async_sessionmaker(
     autoflush=False,
     autocommit=False,
 )
+app.state.rbac_session_factory = _TestingSessionLocal
+app.state.audit_session_factory = _TestingSessionLocal
 
 
 # ---------------------------------------------------------------------------
-# Session-scoped: create all tables once
+# Session-scoped: create auth tables once
 # ---------------------------------------------------------------------------
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create a single event loop for the entire test session."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def create_tables():
-    """Create SQLAlchemy tables in the in-memory SQLite database once per session."""
+    """Create only tables needed by auth tests in the isolated SQLite database."""
+    from app.models.user import User
+    from app.models.hospital import AuditLog
+
     async with _engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        test_tables = [User.__table__, AuditLog.__table__]
+        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=test_tables))
     yield
     async with _engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(lambda sync_conn: Base.metadata.drop_all(sync_conn, tables=test_tables))
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +103,7 @@ def override_get_db(db_session: AsyncSession):
 @pytest.fixture()
 def client() -> TestClient:
     """Return a synchronous FastAPI TestClient."""
-    with TestClient(app, raise_server_exceptions=False) as c:
+    with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as c:
         yield c
 
 
@@ -117,6 +115,6 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
     """Return an async HTTPX client connected to the test app."""
     async with AsyncClient(
         transport=ASGITransport(app=app),
-        base_url="http://testserver",
+        base_url="http://localhost",
     ) as ac:
         yield ac

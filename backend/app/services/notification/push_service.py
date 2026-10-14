@@ -38,8 +38,8 @@ class PushNotificationService:
         data: Optional[Dict[str, Any]] = None
     ) -> bool:
         if not settings.FIREBASE_CREDENTIALS:
-            logger.warning(f"[DEV MODE] Firebase credentials unset. Push to token {token[:10]}...: '{title}' - '{body}'")
-            return True
+            logger.error("Firebase credentials are not configured; push delivery was not attempted.")
+            return False
 
         headers = {
             "Authorization": f"key={settings.FIREBASE_CREDENTIALS}",

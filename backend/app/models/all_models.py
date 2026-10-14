@@ -14,6 +14,9 @@ from .tracking import LocationTracking
 from .vitals import PatientVitals
 from .pharmacy import Prescription, Inventory
 from .billing import Billing
+from .security import RefreshToken
+from .queue import QueueEntry
+from .bed import Bed
 
 __all__ = [
     "User",
@@ -31,5 +34,8 @@ __all__ = [
     "PatientVitals",
     "Prescription",
     "Billing",
-    "Inventory"
+    "Inventory",
+    "RefreshToken",
+    "QueueEntry",
+    "Bed",
 ]

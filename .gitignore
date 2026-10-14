@@ -10,6 +10,9 @@ venv/
 env/
 ENV/
 .venv/
+backend/.venv311/
+backend/.venv-validation/
+backend/.python-runtime/
 *.egg-info/
 dist/
 build/

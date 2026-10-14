@@ -1,50 +1,56 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from typing import List
 
 from app.db.session import get_db
 from app.models.doctor import Department
-from app.services.navigation.route_planner import route_planner
 
 router = APIRouter()
 
+
+def _department_payload(department: Department) -> dict[str, object]:
+    return {
+        "id": department.id,
+        "name": department.name,
+        "description": department.description,
+        "floor": department.floor,
+        "building": department.building,
+        "wing": department.wing,
+        "phone": department.phone,
+        "email": department.email,
+    }
+
+
 @router.get("/departments")
-async def list_departments(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Department))
-    return result.scalars().all()
+async def list_departments(db: AsyncSession = Depends(get_db)) -> list[dict[str, object]]:
+    result = await db.execute(select(Department).order_by(Department.name.asc()))
+    return [_department_payload(item) for item in result.scalars().all()]
+
 
 @router.get("/departments/{id}")
-async def get_department(id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Department).filter(Department.id == id))
-    return result.scalars().first()
+async def get_department(id: int, db: AsyncSession = Depends(get_db)) -> dict[str, object]:
+    result = await db.execute(select(Department).where(Department.id == id))
+    department = result.scalar_one_or_none()
+    if department is None:
+        raise HTTPException(status_code=404, detail="Department not found.")
+    return _department_payload(department)
+
+
+@router.get("/route")
+async def get_navigation_route():
+    raise HTTPException(status_code=501, detail="Indoor routes are not configured for this hospital.")
+
 
 @router.post("/route")
-async def get_navigation_route(start_node: str, end_node: str, accessible: bool = False):
-    path_data = route_planner.find_path(start_node, end_node, needs_accessible=accessible)
-    if not path_data or "error" in path_data:
-        return {"error": "Path not found", "path": []}
-    return path_data
+async def create_navigation_route():
+    raise HTTPException(status_code=501, detail="Indoor routes are not configured for this hospital.")
 
-@router.post("/location")
-async def update_patient_location(user_id: int, latitude: float, longitude: float, floor: int = 0):
-    return {
-        "status": "success",
-        "user_id": user_id,
-        "location": {"latitude": latitude, "longitude": longitude, "floor": floor},
-        "message": "Location updated successfully"
-    }
 
 @router.get("/poi")
 async def get_points_of_interest():
-    return {
-        "pois": [
-            {"name": "Restroom A", "location": "Ground Floor"},
-            {"name": "Cafeteria", "location": "1st Floor"},
-            {"name": "Prayer Room", "location": "Basement"}
-        ]
-    }
+    raise HTTPException(status_code=501, detail="Points of interest are not configured for this hospital.")
+
 
 @router.get("/floor-map")
 async def get_floor_map(floor: int):
-    return {"floor": floor, "map_url": f"https://cdn.naviora.ai/maps/floor_{floor}.svg"}
+    raise HTTPException(status_code=501, detail="Floor maps are not configured for this hospital.")

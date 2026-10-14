@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Union
+from typing import Any, Mapping, Union
 import jwt
 from passlib.context import CryptContext
 from app.core.config import settings
@@ -9,7 +9,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ALGORITHM = "HS256"
 
 def create_access_token(
-    subject: Union[str, Any], expires_delta: timedelta = None
+    subject: Union[str, Any], expires_delta: timedelta = None,
+    claims: Mapping[str, Any] | None = None,
 ) -> str:
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -18,11 +19,15 @@ def create_access_token(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
     to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
+    if claims:
+        reserved = {"exp", "sub", "type"}
+        to_encode.update({key: value for key, value in claims.items() if key not in reserved})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 def create_refresh_token(
-    subject: Union[str, Any], expires_delta: timedelta = None
+    subject: Union[str, Any], expires_delta: timedelta = None,
+    claims: Mapping[str, Any] | None = None,
 ) -> str:
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -31,6 +36,9 @@ def create_refresh_token(
             minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES
         )
     to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
+    if claims:
+        reserved = {"exp", "sub", "type"}
+        to_encode.update({key: value for key, value in claims.items() if key not in reserved})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 

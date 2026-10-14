@@ -30,8 +30,8 @@ async def get_current_user(
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
         )
-        user_id: str = payload.get("sub")
-        if user_id is None:
+        subject = payload.get("sub")
+        if not isinstance(subject, str) or not subject.isdigit() or payload.get("type") != "access":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Could not validate credentials",
@@ -42,11 +42,17 @@ async def get_current_user(
             detail="Could not validate credentials",
         )
     
-    result = await db.execute(select(User).filter(User.id == int(user_id)))
+    result = await db.execute(select(User).filter(User.id == int(subject)))
     user = result.scalars().first()
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    token_role = payload.get("role")
+    if not isinstance(token_role, str) or token_role != user.role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token role is missing or no longer matches the account role.",
+        )
     return user
 
 def get_current_active_user(
@@ -58,14 +64,8 @@ def get_current_active_user(
 
 def check_role(roles: list[str]):
     """
-    Enterprise RBAC (Role Based Access Control) decorator.
+    Backwards-compatible role dependency; new routes may use app.core.rbac directly.
     """
-    def role_checker(current_user: User = Depends(get_current_active_user)):
-        if current_user.role not in roles:
-            logger.warning(f"Unauthorized role access: user={current_user.id} role={current_user.role} required={roles}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"User role '{current_user.role}' is not authorized for this action."
-            )
-        return current_user
-    return role_checker
+    from app.core.rbac import require_role
+
+    return require_role(*roles)

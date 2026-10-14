@@ -73,8 +73,8 @@ class HospitalBrain(BaseAgent):
                 else:
                     base_analysis = json.loads(response_text)
             except Exception as e:
-                logger.warning(f"HospitalBrain using fallback classifier: {e}")
-                base_analysis = self._fallback_classifier(user_query)
+                logger.exception("HospitalBrain could not obtain a valid classifier response")
+                raise RuntimeError("Intent classification service is unavailable.") from e
 
             # Store result in Redis cache
             await cache_service.set_cached_intent(user_query, base_analysis)
@@ -106,37 +106,3 @@ class HospitalBrain(BaseAgent):
         }
 
         return final_response
-
-    def _fallback_classifier(self, query: str) -> Dict[str, Any]:
-        query_lower = query.lower()
-        
-        # 1. Emergency (highest priority in triage)
-        if any(w in query_lower for w in ["emergency", "critical", "pain", "accident", "ambulance", "die", "attack", "unconscious", "stroke", "bleed", "cardiac", "urgent", "help"]):
-            return {"intent": "emergency", "confidence": 0.9, "entities": {}}
-        
-        # 2. Appointment Booking & Doctor Scheduling
-        elif any(w in query_lower for w in ["book", "appointment", "doctor", "schedule", "appoint", "slot", "consult", "check in", "i am here", "arrived"]):
-            return {"intent": "appointment", "confidence": 0.85, "entities": {}}
-        
-        # 3. Pharmacy & Medications
-        elif any(w in query_lower for w in ["pharmacy", "medicine", "medication", "pill", "tablet", "dosage", "prescription", "paracetamol", "amoxicillin", "stock", "refill"]):
-            return {"intent": "pharmacy", "confidence": 0.85, "entities": {}}
-        
-        # 4. Navigation & Wayfinding
-        elif any(w in query_lower for w in ["where is", "navigate", "directions", "how to get", "route", "way to", "location of", "floor map", "find"]):
-            return {"intent": "navigation", "confidence": 0.85, "entities": {}}
-        
-        # 5. Billing & Invoices
-        elif any(w in query_lower for w in ["pay", "bill", "invoice", "cost", "price", "fee", "estimate", "charges", "insurance claim"]):
-            return {"intent": "billing", "confidence": 0.85, "entities": {}}
-        
-        # 6. Patient Registration
-        elif any(w in query_lower for w in ["register", "sign up", "onboard", "new patient", "create account", "profile"]):
-            return {"intent": "registration", "confidence": 0.85, "entities": {}}
-        
-        # 7. General Information & FAQ
-        elif any(w in query_lower for w in ["visiting", "hours", "timing", "policy", "faq", "info", "information", "rules"]):
-            return {"intent": "information", "confidence": 0.85, "entities": {}}
-        
-        else:
-            return {"intent": "information", "confidence": 0.6, "entities": {}}

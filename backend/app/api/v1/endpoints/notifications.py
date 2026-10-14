@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, status
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update, delete
@@ -46,8 +48,9 @@ async def mark_as_read(
     ))
     notif = result.scalars().first()
     if not notif:
-        return {"message": "Notification not found"}
+        raise HTTPException(status_code=404, detail="Notification not found.")
     notif.is_read = True
+    notif.read_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
     return {"message": "Marked as read"}
 
@@ -75,7 +78,7 @@ async def delete_notification(
         Notification.user_id == current_user.id,
     ))
     if result.rowcount == 0:
-        return {"message": "Notification not found"}
+        raise HTTPException(status_code=404, detail="Notification not found.")
     await db.commit()
     return {"message": "Notification deleted"}
 

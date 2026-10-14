@@ -18,6 +18,7 @@ from app.api.v1.endpoints import (
     voice,
     feedback,
     staff,
+    departments,
 )
 
 api_router = APIRouter()
@@ -33,6 +34,7 @@ api_router.include_router(pharmacy.router, prefix="/pharmacy", tags=["pharmacy"]
 api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(doctors.router, prefix="/doctors", tags=["doctors"])
+api_router.include_router(departments.router, prefix="/departments", tags=["departments"])
 api_router.include_router(navigation.router, prefix="/navigation", tags=["navigation"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])

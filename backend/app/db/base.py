@@ -14,3 +14,6 @@ from app.models.tracking import LocationTracking  # noqa
 from app.models.pharmacy import Prescription, Inventory  # noqa
 from app.models.billing import Billing  # noqa
 from app.models.vitals import PatientVitals  # noqa
+from app.models.security import RefreshToken  # noqa
+from app.models.queue import QueueEntry  # noqa
+from app.models.bed import Bed  # noqa

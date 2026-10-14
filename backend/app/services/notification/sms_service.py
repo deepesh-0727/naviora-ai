@@ -13,9 +13,31 @@ class SMSService:
         self.max_retries = max_retries
 
     async def _send(self, phone: str, message: str) -> bool:
+        if settings.TWILIO_SID and settings.TWILIO_AUTH_TOKEN and settings.TWILIO_PHONE_NUMBER:
+            endpoint = (
+                "https://api.twilio.com/2010-04-01/Accounts/"
+                f"{settings.TWILIO_SID}/Messages.json"
+            )
+            for attempt in range(self.max_retries):
+                try:
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        response = await client.post(
+                            endpoint,
+                            data={"To": phone, "From": settings.TWILIO_PHONE_NUMBER, "Body": message},
+                            auth=(settings.TWILIO_SID, settings.TWILIO_AUTH_TOKEN),
+                        )
+                        response.raise_for_status()
+                    return True
+                except httpx.HTTPError:
+                    if attempt == self.max_retries - 1:
+                        logger.exception("Twilio SMS delivery failed after retries")
+                        return False
+                    await asyncio.sleep(2**attempt)
+            return False
+
         if not settings.TEXTLOCAL_API_KEY:
-            logger.warning(f"[DEV MODE] SMS API Key not set. Message to {phone}: '{message}'")
-            return True
+            logger.error("SMS delivery is not configured; refusing to report OTP as delivered.")
+            return False
 
         payload = {
             "apikey": settings.TEXTLOCAL_API_KEY,
@@ -36,8 +58,10 @@ class SMSService:
                 await asyncio.sleep(2**attempt)
         return False
 
-    async def send_otp(self, phone: str, code: str) -> bool:
-        return await self._send(phone, f"Your Naviora AI verification code is {code}. It expires in 5 minutes.")
+    async def send_otp(self, phone: str, code: str, expires_in_seconds: int = 300) -> bool:
+        expiry_minutes = max(1, (expires_in_seconds + 59) // 60)
+        message = f"Your Naviora AI verification code is {code}. It expires in {expiry_minutes} minute(s)."
+        return await self._send(phone, message)
 
     async def send_appointment_reminder(self, phone: str, details: str) -> bool:
         return await self._send(phone, f"Naviora AI appointment reminder: {details}")

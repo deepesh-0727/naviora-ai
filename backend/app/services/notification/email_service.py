@@ -15,8 +15,8 @@ class EmailService:
 
     async def _send(self, to_email: str, subject: str, content_html: str) -> bool:
         if not settings.EMAIL_API_KEY:
-            logger.warning(f"[DEV MODE] SendGrid API key not set. Email to {to_email}: Subject '{subject}'")
-            return True
+            logger.error("Email provider credentials are not configured; email delivery was not attempted.")
+            return False
 
         payload = {
             "personalizations": [{"to": [{"email": to_email}]}],

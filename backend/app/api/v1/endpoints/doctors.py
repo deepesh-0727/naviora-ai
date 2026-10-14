@@ -1,7 +1,7 @@
 import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -15,6 +15,7 @@ from app.models.doctor import Doctor, Department
 from app.models.hospital import StaffSchedule
 from app.models.patient import Patient
 from app.schemas.doctor import Doctor as DoctorSchema
+from app.services.availability_service import get_available_slots
 
 router = APIRouter()
 
@@ -263,6 +264,24 @@ async def get_doctors_by_dept(department_id: int, db: AsyncSession = Depends(get
         .filter(Doctor.department_id == department_id)
     )
     return result.scalars().all()
+
+
+@router.get("/{id}/availability")
+async def get_doctor_availability_by_date(
+    id: int,
+    for_date: datetime.date = Query(default_factory=datetime.date.today, alias="date"),
+    db: AsyncSession = Depends(get_db),
+):
+    doctor_result = await db.execute(select(Doctor).where(Doctor.id == id))
+    doctor = doctor_result.scalar_one_or_none()
+    if doctor is None:
+        raise HTTPException(status_code=404, detail="Doctor not found.")
+    return {
+        "doctor_id": doctor.id,
+        "date": for_date,
+        "is_available": doctor.is_available,
+        "available_slots": await get_available_slots(db, doctor, for_date),
+    }
 
 
 @router.put("/availability")

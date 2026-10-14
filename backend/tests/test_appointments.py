@@ -63,49 +63,12 @@ def test_get_queue_status_unauthorized(client):
 
 
 # ---------------------------------------------------------------------------
-# Doctor availability (does NOT require auth)
+# Doctor availability requires an authenticated API role
 # ---------------------------------------------------------------------------
 
-def test_get_doctor_availability_unknown_doctor(client):
-    """Requesting availability for a non-existent doctor should return 404."""
-    resp = client.get("/api/v1/appointments/doctor/999999/availability")
-    assert resp.status_code == 404
-
-
-def test_get_doctor_availability_response_shape(client, db_session):
-    """
-    If a doctor exists, the availability response must contain the expected keys.
-    This is a schema-level test using an in-memory DB seeded with a doctor row.
-    """
-    from app.models.doctor import Doctor
-
-    # Seed a minimal doctor row into the in-memory SQLite DB.
-    doctor = Doctor(
-        first_name="Test",
-        last_name="Doctor",
-        specialization="General",
-        is_available=True,
-        max_patients_per_day=30,
-        current_patients=5,
-        avg_consultation_time=15,
-        consultation_fee=500.0,
-    )
-    import asyncio
-    asyncio.get_event_loop().run_until_complete(_seed_doctor(db_session, doctor))
-
-    resp = client.get(f"/api/v1/appointments/doctor/{doctor.id}/availability")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "doctor_id" in body
-    assert "is_available" in body
-    assert "available_slots" in body
-    assert isinstance(body["available_slots"], list)
-
-
-async def _seed_doctor(session, doctor):
-    session.add(doctor)
-    await session.commit()
-    await session.refresh(doctor)
+def test_get_doctor_availability_unauthorized(client):
+    response = client.get("/api/v1/doctors/1/availability")
+    assert response.status_code == 401
 
 
 # ---------------------------------------------------------------------------

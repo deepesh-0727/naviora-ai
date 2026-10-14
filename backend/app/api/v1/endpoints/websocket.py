@@ -1,6 +1,9 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends
 import jwt
 import logging
+import json
+import secrets
+from redis.asyncio import Redis
 from app.core import security
 from app.core.config import settings
 from app.services.ws_manager import ws_manager
@@ -16,7 +19,8 @@ logger = logging.getLogger(__name__)
 @router.websocket("/stream")
 async def websocket_endpoint(
     websocket: WebSocket,
-    token: str = Query(..., description="JWT Authentication Token")
+    token: str = Query(..., description="JWT Authentication Token"),
+    session_id: str | None = Query(None, description="Redis-backed conversation session"),
 ):
     """
     Real-time WebSocket Gateway for voice assistant streams and notifications
@@ -27,6 +31,8 @@ async def websocket_endpoint(
             token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
         )
         user_id = payload.get("sub")
+        if payload.get("type") != "access":
+            raise ValueError("Access token required")
     except Exception as e:
         logger.error(f"WebSocket auth failed: {e}")
         await websocket.close(code=4003)
@@ -36,10 +42,21 @@ async def websocket_endpoint(
         await websocket.close(code=4003)
         return
 
-    await ws_manager.connect(websocket, str(user_id))
+    if not str(user_id).isdigit():
+        await websocket.close(code=4003)
+        return
 
-    # Session context stub
-    session_context = {}
+    session_key = session_id or secrets.token_urlsafe(24)
+    redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+    redis_key = f"naviora:session:{user_id}:{session_key}"
+    try:
+        await redis.ping()
+    except Exception:
+        await redis.aclose()
+        await websocket.close(code=1013, reason="Session storage unavailable")
+        return
+
+    await ws_manager.connect(websocket, str(user_id))
 
     try:
         while True:
@@ -61,7 +78,7 @@ async def websocket_endpoint(
 
                     if user:
                         result = await voice_orchestrator.process_audio_command(
-                            db, user, audio_data, session_context
+                            db, user, audio_data, await _load_session_context(redis, redis_key, user_id, session_key)
                         )
 
                         # Send back the metadata and audio response
@@ -71,6 +88,7 @@ async def websocket_endpoint(
                             "intent": result.get("intent"),
                             "response_text": result.get("response_text")
                         })
+                        await _save_session_context(redis, redis_key, user_id, session_key)
 
                         if result.get("audio_response"):
                             await websocket.send_bytes(result["audio_response"])
@@ -108,11 +126,9 @@ async def websocket_endpoint(
                                 user = result.scalars().first()
 
                                 if user:
-                                    # Update session context for specialized agents if needed
-                                    session_context["user_id"] = user_id
-
                                     process_result = await voice_orchestrator.process_audio_command(
-                                        db, user, audio_data, session_context
+                                        db, user, audio_data,
+                                        await _load_session_context(redis, redis_key, user_id, session_key),
                                     )
 
                                     await websocket.send_json({
@@ -121,6 +137,7 @@ async def websocket_endpoint(
                                         "intent": process_result.get("intent"),
                                         "response_text": process_result.get("response_text")
                                     })
+                                    await _save_session_context(redis, redis_key, user_id, session_key)
 
                                     if process_result.get("audio_response"):
                                         await websocket.send_bytes(process_result["audio_response"])
@@ -147,3 +164,20 @@ async def websocket_endpoint(
     except Exception as e:
         logger.error(f"Error handling WebSocket message: {e}")
         await ws_manager.disconnect(websocket, str(user_id))
+    finally:
+        await redis.aclose()
+
+
+async def _load_session_context(redis: Redis, key: str, user_id: str, session_id: str) -> dict:
+    stored = await redis.get(key)
+    context = json.loads(stored) if stored else {}
+    context.update({"session_id": session_id, "user_id": int(user_id)})
+    return context
+
+
+async def _save_session_context(redis: Redis, key: str, user_id: str, session_id: str) -> None:
+    await redis.set(
+        key,
+        json.dumps({"session_id": session_id, "user_id": int(user_id)}),
+        ex=settings.CACHE_TTL,
+    )

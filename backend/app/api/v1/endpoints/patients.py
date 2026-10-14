@@ -1,17 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import date, datetime, time
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.api import deps
 from app.db.session import get_db
 from app.models.patient import Patient
+from app.models.user import User
 from app.models.appointment import Appointment
 from app.models.doctor import Doctor
 from app.models.vitals import PatientVitals
 from app.schemas.vitals import PatientVitals as PatientVitalsSchema
 from app.schemas.vitals import PatientVitalsCreate
+from app.core.rbac import require_permission
 
 router = APIRouter()
 VITALS_WRITE_ROLES = {"doctor", "staff", "nurse", "admin"}
@@ -53,20 +56,45 @@ class PatientProfile(BaseModel):
     insurance_number: Optional[str] = None
     date_of_birth: Optional[str] = None
     gender: Optional[str] = None
+    total_visits: int = 0
+    last_visit_date: Optional[date] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class PatientProfileUpdate(BaseModel):
-    first_name: str
-    last_name: str
-    blood_group: Optional[str] = None
+    first_name: Optional[str] = Field(None, min_length=2, max_length=50)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    date_of_birth: Optional[date] = None
+    gender: Optional[str] = Field(None, pattern="^(male|female|other|unknown)$")
+    blood_group: Optional[str] = Field(None, pattern="^(A|B|AB|O)[+-]$")
+    phone: Optional[str] = Field(None, min_length=10, max_length=20)
+    email: Optional[EmailStr] = None
     allergies: Optional[List[str]] = None
-    emergency_contact: str
-    emergency_contact_name: str
+    emergency_contact: Optional[str] = Field(None, min_length=7, max_length=20)
+    emergency_contact_name: Optional[str] = Field(None, min_length=2, max_length=100)
     medical_history: Optional[str] = None
     insurance_provider: Optional[str] = None
     insurance_number: Optional[str] = None
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def validate_date_of_birth(cls, value: Optional[date]) -> Optional[date]:
+        if value is not None and value > date.today():
+            raise ValueError("Date of birth cannot be in the future.")
+        return value
+
+    @field_validator("phone")
+    @classmethod
+    def validate_indian_phone(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            digits = "".join(character for character in value if character.isdigit())
+            if len(digits) == 12 and digits.startswith("91"):
+                digits = digits[2:]
+            if len(digits) != 10 or digits[0] not in "6789":
+                raise ValueError("Enter a valid Indian phone number.")
+            return digits
+        return value
 
 
 @router.get("/vitals")
@@ -127,7 +155,7 @@ async def record_patient_vitals(
 
 @router.get("/profile", response_model=PatientProfile)
 async def get_profile(
-    current_user = Depends(deps.get_current_active_user),
+    current_user = Depends(require_permission("view_own_profile")),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -141,6 +169,13 @@ async def get_profile(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Patient profile not found."
         )
+    visits_result = await db.execute(
+        select(Appointment)
+        .where(Appointment.patient_id == patient.id, Appointment.status == "completed")
+        .order_by(Appointment.actual_time.desc(), Appointment.scheduled_time.desc())
+    )
+    visits = visits_result.scalars().all()
+    last_visit = (visits[0].actual_time or visits[0].scheduled_time) if visits else None
     return {
         "id": patient.id,
         "first_name": patient.first_name,
@@ -156,12 +191,14 @@ async def get_profile(
         "insurance_number": patient.insurance_number,
         "date_of_birth": patient.date_of_birth.date().isoformat() if patient.date_of_birth else None,
         "gender": patient.gender,
+        "total_visits": len(visits),
+        "last_visit_date": last_visit.date() if last_visit else None,
     }
 
 @router.put("/profile")
 async def update_profile(
     profile_update: PatientProfileUpdate,
-    current_user = Depends(deps.get_current_active_user),
+    current_user = Depends(require_permission("manage_own_profile")),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -176,15 +213,28 @@ async def update_profile(
             detail="Patient profile not found."
         )
     
-    patient.first_name = profile_update.first_name
-    patient.last_name = profile_update.last_name
-    patient.blood_group = profile_update.blood_group
-    patient.allergies = profile_update.allergies
-    patient.emergency_contact = profile_update.emergency_contact
-    patient.emergency_contact_name = profile_update.emergency_contact_name
-    patient.medical_history = profile_update.medical_history
-    patient.insurance_provider = profile_update.insurance_provider
-    patient.insurance_number = profile_update.insurance_number
+    changes = profile_update.model_dump(exclude_unset=True, exclude_none=True)
+    if not changes:
+        raise HTTPException(status_code=422, detail="At least one profile field is required.")
+
+    for field in ("phone", "email"):
+        if field in changes:
+            value = changes.pop(field)
+            value = str(value).strip().lower() if field == "email" else value
+            duplicate = await db.execute(
+                select(User.id).where(
+                    getattr(User, field) == value,
+                    User.id != current_user.id,
+                )
+            )
+            if duplicate.scalar_one_or_none() is not None:
+                raise HTTPException(status_code=409, detail=f"{field.capitalize()} is already in use.")
+            setattr(current_user, field, value)
+
+    if "date_of_birth" in changes:
+        changes["date_of_birth"] = datetime.combine(changes["date_of_birth"], time.min)
+    for field, value in changes.items():
+        setattr(patient, field, value)
     
     await db.commit()
     return {"message": "Profile updated successfully", "data": profile_update}

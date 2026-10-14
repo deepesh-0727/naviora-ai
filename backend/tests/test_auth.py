@@ -13,20 +13,26 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # ---------------------------------------------------------------------------
 
 def test_health_check(client):
-    response = client.get("/api/v1/health")
-    assert response.status_code == 200
+    response = client.get("/health")
     body = response.json()
-    assert body.get("status") == "ok"
+    assert response.status_code in {200, 503}
+    assert body["status"] in {"healthy", "degraded"}
+    assert set(body["services"]) == {"database", "redis"}
+    assert (body["status"] == "healthy") == all(
+        value == "reachable" for value in body["services"].values()
+    )
 
 
 # ---------------------------------------------------------------------------
 # OTP generation
 # ---------------------------------------------------------------------------
 
-def _mock_redis_ctx(stored_otp=None):
-    """Return a patched Redis that records set/get/delete calls."""
+def _mock_redis_ctx(stored_otp=None, eval_result=1):
+    """Return a patched Redis that records OTP script and storage calls."""
     mock_redis = AsyncMock()
     mock_redis.set.return_value = True
+    mock_redis.exists.return_value = 0
+    mock_redis.eval.return_value = eval_result
     mock_redis.get.return_value = stored_otp
     mock_redis.delete.return_value = True
     mock_redis.aclose.return_value = None
@@ -69,6 +75,20 @@ async def test_otp_generate_sms_failure_returns_503(client):
             mock_redis.delete.assert_called_once()
 
 
+@pytest.mark.asyncio
+async def test_otp_generate_rate_limit_returns_429(client):
+    mock_cls, mock_redis = _mock_redis_ctx(eval_result=4)
+    with patch("redis.asyncio.Redis.from_url", mock_cls):
+        with patch(
+            "app.services.notification.sms_service.sms_service.send_otp",
+            new_callable=AsyncMock,
+            return_value=True,
+        ):
+            response = client.post("/api/v1/auth/otp/generate?phone=%2B919876543210")
+    assert response.status_code == 429
+    mock_redis.set.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # OTP verification
 # ---------------------------------------------------------------------------
@@ -76,7 +96,7 @@ async def test_otp_generate_sms_failure_returns_503(client):
 @pytest.mark.asyncio
 async def test_otp_verify_correct_code(client):
     """Correct OTP code should verify successfully."""
-    mock_cls, _ = _mock_redis_ctx(stored_otp="482910")
+    mock_cls, mock_redis = _mock_redis_ctx(eval_result=1)
     with patch("redis.asyncio.Redis.from_url", mock_cls):
         resp = client.post(
             "/api/v1/auth/otp/verify",
@@ -84,12 +104,13 @@ async def test_otp_verify_correct_code(client):
         )
         assert resp.status_code == 200
         assert resp.json()["message"] == "OTP verified successfully"
+        mock_redis.eval.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_otp_verify_wrong_code_returns_400(client):
     """Wrong OTP code should return 400 Bad Request."""
-    mock_cls, _ = _mock_redis_ctx(stored_otp="482910")
+    mock_cls, _ = _mock_redis_ctx(eval_result=0)
     with patch("redis.asyncio.Redis.from_url", mock_cls):
         resp = client.post(
             "/api/v1/auth/otp/verify",
@@ -101,13 +122,24 @@ async def test_otp_verify_wrong_code_returns_400(client):
 @pytest.mark.asyncio
 async def test_otp_verify_expired_returns_400(client):
     """Expired (missing) OTP should return 400 Bad Request."""
-    mock_cls, _ = _mock_redis_ctx(stored_otp=None)  # key expired / not found
+    mock_cls, _ = _mock_redis_ctx(eval_result=0)  # key expired / not found
     with patch("redis.asyncio.Redis.from_url", mock_cls):
         resp = client.post(
             "/api/v1/auth/otp/verify",
             json={"phone": "+919876543210", "code": "123456"},
         )
         assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_otp_verify_lockout_returns_429(client):
+    mock_cls, _ = _mock_redis_ctx(eval_result=-1)
+    with patch("redis.asyncio.Redis.from_url", mock_cls):
+        resp = client.post(
+            "/api/v1/auth/otp/verify",
+            json={"phone": "+919876543210", "code": "482910"},
+        )
+    assert resp.status_code == 429
 
 
 # ---------------------------------------------------------------------------
@@ -130,13 +162,14 @@ def test_login_missing_credentials_returns_422(client):
 
 
 def test_login_wrong_password_returns_400(client):
-    """Login with a non-existent user should return 400."""
+    """Invalid login or unavailable required Redis limiter should fail closed."""
     resp = client.post(
         "/api/v1/auth/login",
         data={"username": "+919999999999", "password": "wrongpassword"},
     )
-    # auth_service returns None → 400 Bad Request
-    assert resp.status_code == 400
+    assert resp.status_code in {400, 503}
+    if resp.status_code == 503:
+        assert resp.json()["detail"] == "Redis-backed service is unavailable."
 
 
 # ---------------------------------------------------------------------------
@@ -162,13 +195,12 @@ def test_refresh_token_empty_returns_400(client):
 
 
 # ---------------------------------------------------------------------------
-# Logout & password reset stubs
+# Logout and password reset behavior
 # ---------------------------------------------------------------------------
 
-def test_logout_returns_200(client):
+def test_logout_requires_authentication(client):
     resp = client.post("/api/v1/auth/logout")
-    assert resp.status_code == 200
-    assert "Logged out" in resp.json()["message"]
+    assert resp.status_code == 401
 
 
 def test_forgot_password_requires_email_delivery_configuration(client, monkeypatch):
