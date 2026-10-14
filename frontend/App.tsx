@@ -1,4 +1,5 @@
 import React from 'react';
+import * as Sentry from '@sentry/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import 'react-native-gesture-handler';
@@ -30,6 +31,13 @@ import RegistrationScreen from './src/patient/screens/Registration';
 import PatientRoleNavigator from './src/navigation/PatientRoleNavigator';
 
 const Stack = createStackNavigator();
+
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({ dsn: sentryDsn });
+} else {
+  console.warn('EXPO_PUBLIC_SENTRY_DSN not set — frontend error tracking disabled');
+}
 
 function RootNavigator() {
   const { user } = useAuth();
@@ -83,7 +91,7 @@ function RootNavigator() {
   );
 }
 
-export default function App() {
+function App() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -112,3 +120,5 @@ export default function App() {
     </LanguageProvider>
   );
 }
+
+export default Sentry.wrap(App);

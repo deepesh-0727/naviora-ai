@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     # Monitoring
     # =========================================================
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "dev")
 
     @model_validator(mode="after")
     def validate_required_secrets(self) -> "Settings":
