@@ -1,5 +1,8 @@
 import asyncio
+import os
+
 import pytest
+from redis.asyncio import Redis
 
 from app.services.ws_manager import WebSocketManager
 
@@ -96,6 +99,31 @@ async def test_broadcast_fans_out_between_two_manager_instances():
         await first.broadcast("doctor:42", message)
         await wait_for_messages(second_socket, 1)
 
+        assert first_socket.messages == [message]
+        assert second_socket.messages == [message]
+    finally:
+        await first.shutdown()
+        await second.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_broadcast_fans_out_between_two_managers_on_real_redis():
+    redis_url = os.getenv("NAVIORA_TEST_REDIS_URL")
+    if not redis_url:
+        pytest.skip("Set NAVIORA_TEST_REDIS_URL to run the Redis integration test.")
+
+    first = WebSocketManager(redis=Redis.from_url(redis_url, decode_responses=True))
+    second = WebSocketManager(redis=Redis.from_url(redis_url, decode_responses=True))
+    first_socket = FakeWebSocket()
+    second_socket = FakeWebSocket()
+    await first.start()
+    await second.start()
+    try:
+        await first.connect(first_socket, "u1", {"role": "doctor", "staff_id": 42, "sub": "u1"})
+        await second.connect(second_socket, "u2", {"role": "doctor", "staff_id": 42, "sub": "u2"})
+        message = {"event": "queue_update", "data": {"position": 2}}
+        await first.broadcast("doctor:42", message)
+        await wait_for_messages(second_socket, 1)
         assert first_socket.messages == [message]
         assert second_socket.messages == [message]
     finally:
