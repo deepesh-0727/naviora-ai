@@ -10,6 +10,8 @@ import StaffModuleScreen from './StaffModuleScreen';
 import DoctorDashboard from '../screens/DoctorDashboard';
 import DoctorQueue from '../screens/DoctorQueue';
 import PatientDetail from '../screens/PatientDetail';
+import NurseDashboard from '../screens/NurseDashboard';
+import FrontDeskDashboard from '../screens/FrontDeskDashboard';
 
 type TabIconName = ComponentProps<typeof Ionicons>['name'];
 type TabDefinition = { name: string; title: string; endpoint: string; icon: TabIconName };
@@ -79,7 +81,8 @@ function RoleTabs({ role }: { role: Exclude<Role, 'patient' | 'admin' | 'super_a
             {() => {
               if (role === 'doctor' && tab.name === 'Home') return <DoctorDashboard />;
               if (role === 'doctor' && tab.name === 'Queue') return <DoctorQueue />;
-              if (role === 'doctor' && tab.name === 'Patients') return <PatientDetail />;
+              if (role === 'nurse' && tab.name === 'Home') return <NurseDashboard />;
+              if (role === 'front_desk' && tab.name === 'Home') return <FrontDeskDashboard />;
               return <StaffModuleScreen title={tab.title} endpoint={tab.endpoint} />;
             }}
           </Tab.Screen>
