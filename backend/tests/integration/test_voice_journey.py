@@ -1,13 +1,9 @@
 import base64
 import io
-import json
 import wave
 from unittest.mock import AsyncMock
 
-import httpx
 import pytest
-
-from app.services import cache_service as cache_module
 
 
 def deterministic_wav() -> bytes:
@@ -23,43 +19,44 @@ def deterministic_wav() -> bytes:
 @pytest.mark.asyncio
 async def test_voice_journey_transcribes_triages_and_returns_spoken_response(async_client, hospital_actors, monkeypatch):
     from app.services.voice import stt_service, tts_service
+    from app.services.voice.voice_orchestrator import voice_orchestrator
+    from app.services.emergency_service import emergency_service
 
-    cache_read = AsyncMock(return_value=None)
-    cache_write = AsyncMock(return_value=True)
-    monkeypatch.setattr(cache_module.cache_service, "get_cached_intent", cache_read)
-    monkeypatch.setattr(cache_module.cache_service, "set_cached_intent", cache_write)
-
-    response_json = json.dumps({
-        "intent": "emergency",
-        "confidence": 0.99,
-        "entities": {},
-        "emergency_type": "chest pain",
-        "severity": 2,
-        "location_clues": "main lobby",
-        "immediate_action_required": "wait for help",
-    })
-
-    class MockVoiceHTTPClient:
-        def __init__(self, **kwargs):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return None
-
-        async def post(self, url, **kwargs):
-            if url.endswith("/transcribe"):
-                return httpx.Response(200, json={"text": "chest pain at the main lobby"})
-            return httpx.Response(200, json={"response": response_json})
-
-        async def get(self, url, **kwargs):
-            assert url.endswith("/say")
-            return httpx.Response(200, content=b"deterministic-audio")
-
-    monkeypatch.setattr(stt_service.httpx, "AsyncClient", MockVoiceHTTPClient)
-    monkeypatch.setattr(tts_service.httpx, "AsyncClient", MockVoiceHTTPClient)
+    monkeypatch.setattr(
+        stt_service.stt_service,
+        "transcribe",
+        AsyncMock(return_value="chest pain at the main lobby"),
+    )
+    monkeypatch.setattr(
+        voice_orchestrator.brain,
+        "execute",
+        AsyncMock(return_value={
+            "intent": "emergency",
+            "confidence": 0.99,
+            "entities": {},
+            "specialized_details": {
+                "emergency_type": "chest pain",
+                "severity": 2,
+                "location_clues": "main lobby",
+                "immediate_action_required": "wait for help",
+            },
+        }),
+    )
+    monkeypatch.setattr(
+        emergency_service.agent,
+        "execute",
+        AsyncMock(return_value={
+            "emergency_type": "chest pain",
+            "severity": 2,
+            "location_clues": "main lobby",
+            "immediate_action_required": "wait for help",
+        }),
+    )
+    monkeypatch.setattr(
+        tts_service.tts_service,
+        "synthesize",
+        AsyncMock(return_value=b"deterministic-audio"),
+    )
     headers = {"Authorization": f"Bearer {hospital_actors['tokens']['patient']}"}
     response = await async_client.post(
         "/api/v1/voice/process",
