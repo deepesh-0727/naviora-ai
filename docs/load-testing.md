@@ -14,6 +14,10 @@ cd backend
 
 The dedicated smoke user only calls `GET /health`, checks the `200` status and `{"status":"ok"}` body, prints success/failure counts, and exits nonzero if there were no requests or the error rate is at least 1%. It does not authenticate or change database records. Run it against a local service, not production. A passing local smoke run proves only that the local liveness endpoint survived this short load; it does not measure database, Redis, AI, or production capacity.
 
+### Recorded local smoke run — 2026-10-15
+
+The smoke harness was run against a temporary loopback FastAPI process with SQLite test settings and startup hooks disabled: 10 users for 10 seconds, 823 requests, 0 failures (0.00%), p50 7 ms, p95 14 ms, and p99 220 ms. This is evidence for the read-only liveness path only; the 50-user authenticated workflow test below remains unrun.
+
 ## Authenticated workflow load test
 
 `backend/tests/load/locustfile.py` models patient, staff, and emergency workflows using real test-account access tokens. It can create appointments, change queue state, and submit SOS events. Use a disposable local/staging database and test accounts only. Provision the IDs, tokens, appointment times, and emergency payload values required by the file in the process environment, then run a baseline such as:
