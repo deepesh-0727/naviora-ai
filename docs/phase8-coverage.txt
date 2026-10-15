@@ -1,4 +1,4 @@
-Backend coverage after Fix 1: queue_service coverage
+Backend coverage after Fix 2: queue endpoint coverage
 Name                                                          Stmts   Miss  Cover
 ---------------------------------------------------------------------------------
 backend\app\agents\base_agent.py                                 73     48    34%
@@ -12,7 +12,7 @@ backend\app\agents\specialized\information_agent.py               7      0   100
 backend\app\agents\specialized\navigation_agent.py               22      4    82%
 backend\app\agents\specialized\pharmacy_agent.py                 22      4    82%
 backend\app\agents\specialized\registration_agent.py             22      4    82%
-backend\app\api\deps.py                                          42     19    55%
+backend\app\api\deps.py                                          42      8    81%
 backend\app\api\v1\endpoints\admin\__init__.py                   12      0   100%
 backend\app\api\v1\endpoints\admin\analytics.py                  56     26    54%
 backend\app\api\v1\endpoints\admin\audit.py                      35     17    51%
@@ -37,7 +37,7 @@ backend\app\api\v1\endpoints\navigation.py                       31     12    61
 backend\app\api\v1\endpoints\notifications.py                    63     35    44%
 backend\app\api\v1\endpoints\patients.py                        192    121    37%
 backend\app\api\v1\endpoints\pharmacy.py                         64     36    44%
-backend\app\api\v1\endpoints\queue.py                            87     63    28%
+backend\app\api\v1\endpoints\queue.py                            87     11    87%
 backend\app\api\v1\endpoints\staff\__init__.py                   17      0   100%
 backend\app\api\v1\endpoints\staff\doctor.py                     50     26    48%
 backend\app\api\v1\endpoints\staff\emergency.py                  94     64    32%
@@ -63,14 +63,14 @@ backend\app\core\metrics.py                                      17      2    88
 backend\app\core\middleware.py                                   25      0   100%
 backend\app\core\monitoring.py                                   48     13    73%
 backend\app\core\rate_limiter.py                                 11      5    55%
-backend\app\core\rbac.py                                         46     22    52%
+backend\app\core\rbac.py                                         46     19    59%
 backend\app\core\security.py                                     31     10    68%
 backend\app\core\sentry.py                                       14      2    86%
 backend\app\db\base.py                                           16      0   100%
 backend\app\db\base_class.py                                     12      7    42%
 backend\app\db\init_db.py                                         4      1    75%
 backend\app\db\session.py                                        17      9    47%
-backend\app\main.py                                             123     24    80%
+backend\app\main.py                                             123     23    81%
 backend\app\middleware\audit.py                                  40      6    85%
 backend\app\middleware\request_id.py                             31      0   100%
 backend\app\models\appointment.py                                27      0   100%
@@ -116,4 +116,4 @@ backend\app\services\voice\voice_orchestrator.py                 22      7    68
 backend\app\services\ws_manager.py                              259     37    86%
 backend\app\utils\logger.py                                      20      0   100%
 ---------------------------------------------------------------------------------
-TOTAL                                                          5938   2490    58%
+TOTAL                                                          5938   2423    59%

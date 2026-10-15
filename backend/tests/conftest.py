@@ -35,6 +35,7 @@ os.environ["SENTRY_DSN"] = ""
 
 from app.main import app                          # noqa: E402 — env must be set first
 from app.db.session import get_db                 # noqa: E402
+from app.api.deps import get_db as dependency_get_db  # noqa: E402
 from app.db.base import Base                      # noqa: E402  (SQLAlchemy declarative base)
 from app.services.ws_manager import ws_manager    # noqa: E402
 
@@ -144,8 +145,10 @@ def override_get_db(db_session: AsyncSession):
         yield db_session
 
     app.dependency_overrides[get_db] = _get_test_db
+    app.dependency_overrides[dependency_get_db] = _get_test_db
     yield
     app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(dependency_get_db, None)
 
 
 # ---------------------------------------------------------------------------
