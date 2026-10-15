@@ -182,7 +182,12 @@ async def process_text_command(
 
     try:
         analysis = await brain.execute(body.text, session_context)
-        response_text = await intent_executor.execute(db, current_user, analysis)
+        execution_result = await intent_executor.execute(db, current_user, analysis)
+        if isinstance(execution_result, dict):
+            response_text = str(execution_result.get("response_text") or "")
+            analysis = {**analysis, "appointment_result": execution_result}
+        else:
+            response_text = execution_result
     except HTTPException:
         raise
     except Exception as exc:
