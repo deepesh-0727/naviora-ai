@@ -43,3 +43,6 @@ slowapi>=0.1.9
 # Async Tasks
 celery>=5.3.6
 kombu>=5.3.4
+
+# Test coverage
+pytest-cov>=5.0.0

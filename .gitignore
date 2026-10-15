@@ -17,6 +17,7 @@ backend/.python-runtime/
 dist/
 build/
 .pytest_cache/
+.pytest-tmp/
 .mypy_cache/
 
 # ================================
@@ -28,6 +29,8 @@ yarn-debug.log*
 yarn-error.log*
 .expo/
 .expo-shared/
+frontend/.jest-cache/
+frontend/.jest-tmp/
 *.jks
 *.p8
 *.p12

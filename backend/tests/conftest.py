@@ -65,9 +65,9 @@ def disable_global_websocket_lifecycle(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Session-scoped: create auth tables once
+# Per-test table lifecycle keeps the async SQLite engine on the same event loop.
 # ---------------------------------------------------------------------------
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest_asyncio.fixture()
 async def create_tables():
     """Create only tables needed by auth tests in the isolated SQLite database."""
     from app.models.user import User
@@ -85,7 +85,7 @@ async def create_tables():
 # Per-test DB session (each test rolls back on teardown)
 # ---------------------------------------------------------------------------
 @pytest_asyncio.fixture()
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session(create_tables) -> AsyncGenerator[AsyncSession, None]:
     """Provide a clean AsyncSession for each test, rolled back after."""
     async with _TestingSessionLocal() as session:
         yield session
@@ -111,9 +111,11 @@ def override_get_db(db_session: AsyncSession):
 # ---------------------------------------------------------------------------
 @pytest.fixture()
 def client() -> TestClient:
-    """Return a synchronous FastAPI TestClient."""
-    with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as c:
-        yield c
+    """Return a synchronous TestClient without opening production-service lifespan connections."""
+    # Requests use the isolated SQLite dependency override below. Entering the
+    # TestClient context would also run the app's production startup hook and
+    # try to initialize the configured service database for every test.
+    return TestClient(app, base_url="http://localhost", raise_server_exceptions=False)
 
 
 # ---------------------------------------------------------------------------
