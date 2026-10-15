@@ -179,6 +179,12 @@ WHERE created_at >= :start_utc
 
 This is a triage queue, not a confirmed-incident count. Review the associated audit rows and Sentry events with the security owner; record confirmed incident count and disposition in the pilot incident register. `audit_logs` records selected audited API requests, not all security telemetry.
 
+## Admin metrics endpoint
+
+Administrators can retrieve the computed metrics from `GET /api/v1/admin/pilot/metrics`. Optional ISO-8601 `start` and `end` query parameters select a half-open UTC period; when omitted, the endpoint uses the preceding 30 days. Supplying `start >= end` returns `422`.
+
+The endpoint returns database-derived queue wait percentiles, emergency response, no-show rate, voice volume/confidence/review accuracy, NPS and 1–5 satisfaction, and daily/weekly staff login counts. It returns `null` for a statistic with no observations. Uptime is reported as `null` with source `manual_uptimerobot_review`; include the independently exported monitor result in the pilot report rather than treating null as zero or healthy.
+
 ## Baseline and reporting rules
 
 - Treat the 45-minute wait and 25% no-show figures as supplied baseline claims until the hospital validates their source, definitions, cohort, and date range. Do not compare a newly defined measure against an incompatible baseline.

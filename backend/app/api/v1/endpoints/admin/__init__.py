@@ -7,6 +7,7 @@ from app.api.v1.endpoints.admin import (
     dashboard,
     departments,
     health,
+    pilot_metrics,
     resources,
     settings,
     users,
@@ -21,4 +22,5 @@ router.include_router(analytics.router, prefix="/analytics", tags=["admin-analyt
 router.include_router(audit.router, prefix="/audit", tags=["admin-audit"])
 router.include_router(billing.router, prefix="/billing", tags=["admin-billing"])
 router.include_router(health.router, prefix="/health", tags=["admin-health"])
+router.include_router(pilot_metrics.router, prefix="/pilot", tags=["admin-pilot"])
 router.include_router(settings.router, prefix="/settings", tags=["admin-settings"])
