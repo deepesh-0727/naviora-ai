@@ -4,7 +4,7 @@
 **Environment:** production only — `https://naviora-backend-s6je.onrender.com`.
 **Audience:** pilot hospital staff and administrators.
 
-> **Readiness note (checked 2026-10-16):** Production `GET /health` and `GET /health/detailed` returned HTTP 200. Detailed health reported database and Redis reachable, but the optional AI dependency was unreachable. The production OpenAPI route returned 404, so production route availability beyond health was not independently confirmed. The repository also shows that voice booking, a text-entry voice fallback, a queue “Complete” button, and a pilot-metrics dashboard widget are not currently wired into the relevant screens. Use the supported live paths below and describe these limitations accurately; do not claim those capabilities during the demo. Recheck readiness immediately before presenting.
+> **Readiness note (checked 2026-10-16):** Production `GET /health` and `GET /health/detailed` returned HTTP 200. Detailed health reported database and Redis reachable, while the optional AI dependency was unreachable. Voice booking now uses rule-based intent fallback when the LLM is unreachable, and the voice response reports `fallback_used`; booking still requires an explicit yes/no confirmation. The repository includes the voice recording/upload screen, queue completion controls, and Pilot Metrics screen. The latest frontend build's availability on the pilot device and physical microphone behavior were not verified; install and check the intended app build before the demo. Recheck readiness immediately before presenting.
 
 ## Prep (before the 5-minute clock)
 
@@ -23,7 +23,8 @@ Ask the hospital administrator to confirm in production before the meeting that:
 - The patient account is linked to a patient profile and has an appointment in an active queue; its queue position is greater than zero.
 - Keep that queue appointment separate from the new appointment booked in Scene 1 unless the hospital has already arranged the production check-in step between scenes.
 - The doctor and department used for the booking exist, are active, and have a slot available. Do not assume “Dr. Sharma” exists; verify the displayed doctor and slot in the live booking flow.
-- Staff can see the test patient in Doctor Queue, and the admin can open Administration and Audit log.
+- Staff can see the agreed test appointment in Doctor Queue, and the admin can open Pilot Metrics and Audit Log.
+- The patient app build includes the current Voice Assistant recording flow. Confirm microphone permission on the demo phone before starting.
 - Any planned SOS test is approved and staffed. Arrange incident cleanup/resolution after the demo.
 
 Verify the public service before opening the apps:
@@ -33,7 +34,7 @@ curl.exe -i "https://naviora-backend-s6je.onrender.com/health"
 curl.exe -i "https://naviora-backend-s6je.onrender.com/health/detailed"
 ```
 
-Proceed only if both return HTTP 200. In detailed health, confirm `dependencies.database` and `dependencies.redis` are `reachable`. An unavailable optional AI dependency means the voice scene is at risk; use its live manual-booking path and state that voice booking is not available in the current production flow.
+Proceed only if both return HTTP 200. In detailed health, confirm `dependencies.database` and `dependencies.redis` are `reachable`. If the optional AI dependency is unreachable, rule-based voice classification remains available; verify the response displays the **Rule mode** badge. If recording or transcription fails, move to the regular Appointments screen and label that as the manual fallback.
 
 **Account roles:** patient, doctor, emergency responder (`emergency`, doctor, nurse, staff, or admin role), and admin/super_admin. Account credentials and production seed data were not available for verification during script preparation; obtain them from the hospital pilot owner through the approved credential process. Do not put passwords or tokens in this document.
 
@@ -41,21 +42,22 @@ Proceed only if both return HTTP 200. In detailed health, confirm `dependencies.
 
 The scene allocations below total five minutes. Prep and sign-in happen before the clock starts.
 
-### Scene 1 — Patient appointment booking (80 seconds)
+### Scene 1 — Patient voice appointment booking (80 seconds)
 
-1. On the patient phone, open **Appointments** and choose the booking action. Select a live department, doctor, and available slot; confirm the booking.
-2. On the admin laptop, open **Administration** and use **Refresh**. Show the live dashboard data updating. If the dashboard exposes no appointment-specific item, use the Audit log and the patient appointment list to confirm the operation, without claiming a specific KPI changed.
-3. Explain the voice limitation plainly: the Voice Assistant accepts recorded audio, but production's intent executor currently executes only emergency intent. A request such as “Book an appointment with Dr. Sharma tomorrow at 2 PM” is not a supported booking operation today. The app has no text-entry fallback. Do not present a manual booking as a successful voice booking.
+1. On the patient phone, open **Voice Assistant**, press and hold the microphone, and say: “Book an appointment with Dr. [verified doctor name] on [verified date] at [available time].” Release the button to upload the recording.
+2. Show the transcript and response. If the response has a **Rule mode** badge, explain that the system used its rule-based classifier because the LLM was unavailable.
+3. When the assistant asks “Confirm booking? Say yes to confirm or no to cancel,” say “yes.” Show the confirmation response and the new appointment in the patient’s Appointments list. The first utterance prepares a proposal; the appointment is written only after confirmation.
+4. If the mic or transcription path fails, open **Appointments** and book manually. Call this the manual fallback, not a voice booking.
 
-**If the appointment flow fails:** Retry only once after checking the selected live slot. If no slot/account is available, use the pre-booked demo patient's existing appointment to explain the same live appointment and queue views; label it as an existing appointment, not a booking made during the demo. If neither is available, stop this scene rather than inventing a result.
+**If the appointment flow fails:** Retry only once after checking the account, doctor, and live slot. If no slot/account is available, use the pre-booked demo patient's existing appointment to explain the appointment view; label it as existing data, not a booking made during the demo. If neither is available, stop this scene rather than inventing a result.
 
 ### Scene 2 — Live queue tracking (50 seconds)
 
 1. On the patient phone, open **Dashboard** and show the test appointment's current queue position.
-2. On the staff tablet, open **Doctor Queue**. Use **Move up** on the agreed demo appointment to change its live position. This is the queue operation currently exposed by the screen; it does not mark the previous patient complete.
-3. Keep the patient screen visible. Its queue hook listens for the production `queue_update` WebSocket event and reloads appointments; point out the changed position when it updates.
+2. On the staff tablet, open **Doctor Queue** and tap **Mark Complete** for the agreed previous patient. Confirm the status update succeeds and the queue refreshes.
+3. Keep the patient screen visible. The queue view listens for the production `queue_update` WebSocket event and reloads appointments; point out the position change when it updates.
 
-**Fallback:** If the WebSocket update does not arrive promptly, tap **Refresh queue** on the staff screen and refresh the patient Dashboard using the device's normal pull-to-refresh gesture. State that the values are refreshed from production and that live push did not update during this run. Restore the original order if needed.
+**Fallback:** If the WebSocket update does not arrive promptly, tap **Refresh queue** on the staff screen and refresh the patient Dashboard using its pull-to-refresh gesture. State that live push did not update during this run. Restore the original queue state if needed.
 
 ### Scene 3 — Coordinated emergency response (80 seconds)
 
@@ -68,13 +70,12 @@ The scene allocations below total five minutes. Prep and sign-in happen before t
 
 **Fallback:** If location permission or SOS submission fails, do not trigger the endpoint repeatedly and do not create an unapproved incident through a direct form/API. If a previously approved production test incident is already active, use that record in the console and clearly say it was pre-created. Otherwise, skip the live response portion and record the demo as blocked; a screenshot is not evidence of a live production response.
 
-### Scene 4 — Admin dashboard and audit log (60 seconds)
+### Scene 4 — Admin pilot metrics and audit log (60 seconds)
 
-1. In the admin panel, open **Administration** and press **Refresh**. The current screen loads the live dashboard KPI, chart, and alert endpoints. Identify the values as the dashboard's available operational data and distinguish empty/unavailable data from zero.
-2. Open **Audit log** and inspect recent records. Point to records only when the corresponding action actually appears; do not promise that booking, queue changes, or every SOS action is audited unless the row is present.
-3. The separate pilot metrics API is `GET /api/v1/admin/pilot/metrics` and requires an admin login. The current Administration screen does not call this endpoint. Do not describe its contents as displayed in the dashboard unless a deployed UI update has been verified.
+1. In the admin panel, open **Pilot Metrics**. Show the wait time, emergency response, no-show, voice, staff, and uptime cards. Use pull-to-refresh if needed; automatic refresh runs every 60 seconds. Empty samples correctly read **No data yet**, not zero.
+2. Open **Audit Log** and inspect recent records. Point to records only when the corresponding action actually appears; do not promise that every action is audited unless its row is present.
 
-**Fallback:** If the dashboard cannot load but production remains reachable, use the live Audit log and the patient/staff records already visible in the apps. If those live views are unavailable too, stop the scene; do not substitute a static screenshot while describing it as live data.
+**Fallback:** If Pilot Metrics cannot load but production remains reachable, use the live Audit Log and patient/staff records already visible in the apps. If those live views are unavailable too, stop the scene; do not substitute a static screenshot while describing it as live data.
 
 ### Closing (30 seconds)
 
@@ -86,13 +87,13 @@ curl.exe -i "https://naviora-backend-s6je.onrender.com/health/detailed"
 
 Expected at the time of the readiness check: HTTP 200 and JSON with `status: "ok"`, plus dependency fields. Read the current response rather than assuming optional services are healthy. Say that Sentry and UptimeRobot are configured only if the pilot owner has confirmed their current project/monitor status; uptime history comes from UptimeRobot, not the application database.
 
-## Readiness gaps to close before claiming the requested end-to-end demo
+## Readiness checks before presenting the end-to-end demo
 
-- **Voice booking:** not supported by the production intent executor; current voice actions execute emergency only. Voice Assistant also has no text-entry fallback.
+- **Voice booking:** the backend and app flow are implemented. First utterance creates a pending proposal; explicit confirmation creates the appointment. An LLM-unavailable response uses rule mode. The physical-device microphone path and installed app build still need a pre-demo check.
 - **Doctor Sharma / available slot / test accounts:** not verifiable from repository access. The hospital pilot owner must confirm these against production.
-- **Queue completion UI:** Doctor Queue exposes **In room**, **No-show**, and **Move up**; it does not expose the requested “mark previous patient complete” action. The live queue position can still be demonstrated with **Move up** and `queue_update`.
+- **Queue completion UI:** Doctor Queue exposes **Mark In-Room**, **Mark Complete**, **No-show**, and **Move up**. Confirm the staff account can update the selected production appointment.
 - **SOS wording and ETA:** patient UI says “Emergency signal sent” / “Help is on the way”; no “Staff notified” text or three-minute ETA is implemented in that screen.
-- **Admin pilot KPIs:** the dashboard screen fetches `/api/v1/admin/dashboard/kpis`, `/charts`, and `/alerts`, not `/api/v1/admin/pilot/metrics`.
+- **Admin pilot metrics:** the **Pilot Metrics** screen calls `GET /api/v1/admin/pilot/metrics`. Some values remain empty until real pilot events or reviews are recorded; uptime is sourced externally from UptimeRobot.
 - **Production status:** latest read-only check for this document returned `/health` 200 and `/health/detailed` 200; DB and Redis were reachable, AI was unreachable, SMS/email were not configured. Recheck immediately before the pilot.
 
-If the hospital requires the unimplemented voice booking, appointment-completion UI, exact emergency messages/ETA, or pilot-metrics dashboard for acceptance, treat this as a no-go until those features are deployed and verified in production.
+If the hospital requires exact emergency messages or a three-minute ETA for acceptance, treat this as a no-go until those behaviors are implemented and verified. Also confirm the latest mobile app build is installed and the production test accounts, doctor, slot, and approved demo incident are ready before presenting.
