@@ -138,6 +138,7 @@ async def test_pilot_metrics_are_computed_from_persisted_rows(async_client, db_s
     assert metrics["no_show_rate"] == {"rate": 0.5, "total": 2, "no_shows": 1}
     assert metrics["voice_intents"] == {
         "total": 2,
+        "fallback_count": 1,
         "avg_confidence": 0.7,
         "reviewed_accuracy": 0.5,
         "reviewed_sample_size": 2,

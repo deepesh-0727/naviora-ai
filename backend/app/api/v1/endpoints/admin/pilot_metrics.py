@@ -99,12 +99,16 @@ async def get_pilot_metrics(
     no_shows = int(no_shows or 0)
 
     voice_counts = await db.execute(
-        select(func.count(VoiceInteraction.id), func.avg(VoiceInteraction.confidence)).where(
+        select(
+            func.count(VoiceInteraction.id),
+            func.avg(VoiceInteraction.confidence),
+            func.count(VoiceInteraction.id).filter(VoiceInteraction.fallback_used.is_(True)),
+        ).where(
             VoiceInteraction.created_at >= period_start,
             VoiceInteraction.created_at < period_end,
         )
     )
-    voice_total, average_confidence = voice_counts.one()
+    voice_total, average_confidence, fallback_count = voice_counts.one()
     reviewed_counts = await db.execute(
         select(
             func.count(VoiceInteraction.id),
@@ -178,6 +182,7 @@ async def get_pilot_metrics(
         },
         "voice_intents": {
             "total": int(voice_total or 0),
+            "fallback_count": int(fallback_count or 0),
             "avg_confidence": round(float(average_confidence), 4)
             if average_confidence is not None else None,
             "reviewed_accuracy": round(reviewed_correct / reviewed_total, 4)
