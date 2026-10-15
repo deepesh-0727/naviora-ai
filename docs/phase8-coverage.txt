@@ -1,4 +1,3 @@
-Backend coverage after Fix 3: WebSocket endpoint coverage
 Name                                                          Stmts   Miss  Cover
 ---------------------------------------------------------------------------------
 backend\app\agents\base_agent.py                                 73     48    34%
@@ -24,18 +23,18 @@ backend\app\api\v1\endpoints\admin\resources.py                  97     52    46
 backend\app\api\v1\endpoints\admin\settings.py                   40     18    55%
 backend\app\api\v1\endpoints\admin\users.py                     120     75    38%
 backend\app\api\v1\endpoints\analytics.py                        23      8    65%
-backend\app\api\v1\endpoints\appointments.py                    147    106    28%
-backend\app\api\v1\endpoints\auth.py                            170     95    44%
-backend\app\api\v1\endpoints\billing.py                         143    100    30%
+backend\app\api\v1\endpoints\appointments.py                    147      4    97%
+backend\app\api\v1\endpoints\auth.py                            170     39    77%
+backend\app\api\v1\endpoints\billing.py                         143     14    90%
 backend\app\api\v1\endpoints\departments.py                      20      8    60%
-backend\app\api\v1\endpoints\doctors.py                         152     97    36%
-backend\app\api\v1\endpoints\emergency.py                       108     73    32%
+backend\app\api\v1\endpoints\doctors.py                         152      7    95%
+backend\app\api\v1\endpoints\emergency.py                       108      8    93%
 backend\app\api\v1\endpoints\feedback.py                         31     18    42%
 backend\app\api\v1\endpoints\health.py                           69     19    72%
-backend\app\api\v1\endpoints\location.py                         15      4    73%
+backend\app\api\v1\endpoints\location.py                         15      2    87%
 backend\app\api\v1\endpoints\navigation.py                       31     12    61%
 backend\app\api\v1\endpoints\notifications.py                    63     35    44%
-backend\app\api\v1\endpoints\patients.py                        192    121    37%
+backend\app\api\v1\endpoints\patients.py                        192     10    95%
 backend\app\api\v1\endpoints\pharmacy.py                         64     36    44%
 backend\app\api\v1\endpoints\queue.py                            87     11    87%
 backend\app\api\v1\endpoints\staff\__init__.py                   17      0   100%
@@ -64,7 +63,7 @@ backend\app\core\middleware.py                                   25      0   100
 backend\app\core\monitoring.py                                   48     13    73%
 backend\app\core\rate_limiter.py                                 11      5    55%
 backend\app\core\rbac.py                                         46     19    59%
-backend\app\core\security.py                                     31      4    87%
+backend\app\core\security.py                                     31      2    94%
 backend\app\core\sentry.py                                       14      2    86%
 backend\app\db\base.py                                           16      0   100%
 backend\app\db\base_class.py                                     12      7    42%
@@ -80,6 +79,7 @@ backend\app\models\communication.py                              35      0   100
 backend\app\models\doctor.py                                     40      0   100%
 backend\app\models\emergency.py                                  24      0   100%
 backend\app\models\hospital.py                                   38      0   100%
+backend\app\models\lab_service.py                                 9      0   100%
 backend\app\models\operations.py                                167      0   100%
 backend\app\models\patient.py                                    26      0   100%
 backend\app\models\pharmacy.py                                   31      0   100%
@@ -97,13 +97,13 @@ backend\app\schemas\location.py                                  12      0   100
 backend\app\schemas\pharmacy.py                                  22      0   100%
 backend\app\schemas\vitals.py                                    18      0   100%
 backend\app\services\analytics\analytics_service.py              25     11    56%
-backend\app\services\auth_service.py                             47      6    87%
+backend\app\services\auth_service.py                             47      4    91%
 backend\app\services\availability_service.py                     36      3    92%
-backend\app\services\billing\billing_service.py                  49     35    29%
+backend\app\services\billing\billing_service.py                  49      8    84%
 backend\app\services\cache_service.py                            59     44    25%
-backend\app\services\emergency_service.py                        45     31    31%
+backend\app\services\emergency_service.py                        45      0   100%
 backend\app\services\intent_executor.py                          26     16    38%
-backend\app\services\location_service.py                         60     46    23%
+backend\app\services\location_service.py                         60     13    78%
 backend\app\services\notification\email_service.py               46     29    37%
 backend\app\services\notification\sms_service.py                 46     34    26%
 backend\app\services\otp_service.py                              54      5    91%
@@ -116,4 +116,4 @@ backend\app\services\voice\voice_orchestrator.py                 22      7    68
 backend\app\services\ws_manager.py                              259     37    86%
 backend\app\utils\logger.py                                      20      0   100%
 ---------------------------------------------------------------------------------
-TOTAL                                                          5938   2356    60%
+TOTAL                                                          5947   1749    71%

@@ -271,6 +271,7 @@ async def razorpay_webhook(
                     action="PAYMENT_CAPTURED",
                     resource="billing",
                     resource_id=billing.id,
+                    status="success",
                     details=f"Razorpay payment captured. payment_id={payment_id} order_id={order_id} amount_paise={amount_paise}"
                 )
                 db.add(audit)

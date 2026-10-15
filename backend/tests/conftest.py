@@ -92,6 +92,7 @@ async def create_tables():
     from app.models.security import RefreshToken
     from app.models.pharmacy import Prescription
     from app.models.vitals import PatientVitals
+    from app.models.billing import Billing
 
     async with _engine.begin() as conn:
         test_tables = [
@@ -99,6 +100,7 @@ async def create_tables():
             Doctor.__table__, Appointment.__table__, QueueEntry.__table__,
             StaffSchedule.__table__, RefreshToken.__table__, EmergencyMessage.__table__,
             Prescription.__table__, PatientVitals.__table__,
+            Billing.__table__,
         ]
         # SQLite has no SpatiaLite extension in the test runtime. Keep the
         # ordinary department fields used by these tests, without a geometry
@@ -119,11 +121,19 @@ async def create_tables():
             "en_route_at DATETIME, arrival_time DATETIME, treatment_notes TEXT, "
             "created_at DATETIME, updated_at DATETIME)"
         )
+        await conn.exec_driver_sql(
+            "CREATE TABLE location_tracking ("
+            "id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, latitude FLOAT NOT NULL, "
+            "longitude FLOAT NOT NULL, accuracy FLOAT NOT NULL DEFAULT 1.0, floor INTEGER NOT NULL DEFAULT 0, "
+            "building VARCHAR(50) NOT NULL DEFAULT 'Main', is_active BOOLEAN NOT NULL DEFAULT 1, "
+            "created_at DATETIME, location BLOB)"
+        )
         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=test_tables))
     yield
     async with _engine.begin() as conn:
         await conn.run_sync(lambda sync_conn: Base.metadata.drop_all(sync_conn, tables=test_tables))
         await conn.exec_driver_sql("DROP TABLE IF EXISTS emergency_cases")
+        await conn.exec_driver_sql("DROP TABLE IF EXISTS location_tracking")
         await conn.exec_driver_sql("DROP TABLE IF EXISTS departments")
 
 

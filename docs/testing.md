@@ -32,17 +32,18 @@ the 50% target.
 
 ## Coverage policy and current status
 
-- Backend overall gate: 70% (the current local run is 60%, so CI will fail until more
-  application code is covered).
-- Backend services: 64% combined, below the requested 80% target. `queue_service.py`
-  is at 90% and the queue endpoint module is at 87%.
-- Latest backend run: 128 passed, 8 skipped, with zero failures. The 8 skips are the
+- Backend overall gate: 70%; the latest local run reached 71%.
+- Backend services: the emergency service is at 100%, location service at 78%,
+  and `queue_service.py` at 90%. `queue.py` is at 87%; appointments and doctors
+  endpoints are at 97% and 95% respectively.
+- Latest backend run: 172 passed, 8 skipped, with zero failures. The 8 skips are the
   Redis-dependent integration journeys that require a verified dedicated test Redis.
 - Frontend Jest: 17 tests pass across 8 suites. In the current full hooks/services
   inventory, statement coverage is 21.75%; the modules exercised by the new tests
   individually range from 51% to 92%.
 - Redis-backed patient, staff, emergency, RBAC, and realtime integration journeys are
-  present but were skipped locally because no `NAVIORA_TEST_REDIS_URL` was configured.
+  present but were skipped locally because no verified dedicated test Redis was available.
+- The complete per-file backend coverage table is in `docs/phase8-coverage.txt`.
 - Locust files are in `backend/tests/load/`. The 50-user, 60-second smoke run is
   `NOT VERIFIED — needs running backend`.
 
