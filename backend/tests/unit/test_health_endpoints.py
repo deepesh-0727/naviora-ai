@@ -145,6 +145,13 @@ async def test_detailed_health_reports_dependency_status_and_uptime(monkeypatch)
     monkeypatch.setattr(health, "_check_database", AsyncMock(return_value=(True, None)))
     monkeypatch.setattr(health, "_check_redis", AsyncMock(return_value=(True, {"redis_version": "7.2.0"})))
     monkeypatch.setattr(health, "check_ai_service_health", AsyncMock(return_value=True))
+    monkeypatch.setattr(settings, "SMS_API_KEY", "")
+    monkeypatch.setattr(settings, "TEXTLOCAL_API_KEY", "")
+    monkeypatch.setattr(settings, "TWILIO_SID", "")
+    monkeypatch.setattr(settings, "TWILIO_AUTH_TOKEN", "")
+    monkeypatch.setattr(settings, "TWILIO_PHONE_NUMBER", "")
+    monkeypatch.setattr(settings, "EMAIL_API_KEY", "")
+    monkeypatch.setattr(settings, "SENDGRID_API_KEY", "")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as test_client:
         response = await test_client.get("/health/detailed")
@@ -154,7 +161,12 @@ async def test_detailed_health_reports_dependency_status_and_uptime(monkeypatch)
     assert body["status"] == "ok"
     assert body["version"] == "1.0.0"
     assert body["uptime_seconds"] >= 0
-    assert body["dependencies"] == {"database": "reachable", "redis": "reachable", "ai": "reachable"}
+    assert body["dependencies"] == {"database": "reachable", "redis": "reachable"}
+    assert body["optional_dependencies"] == {
+        "ai": "reachable",
+        "sms": "not_configured",
+        "email": "not_configured",
+    }
 
 
 @pytest.mark.asyncio
@@ -171,7 +183,36 @@ async def test_detailed_health_reports_degraded_dependencies(monkeypatch):
     assert response.json()["dependencies"] == {
         "database": "reachable",
         "redis": "unreachable",
+    }
+    assert response.json()["optional_dependencies"]["ai"] == "unreachable"
+
+
+@pytest.mark.asyncio
+async def test_health_detailed_optional_deps_dont_affect_status(monkeypatch):
+    """AI unavailable and unconfigured providers do not degrade critical health."""
+    monkeypatch.setattr(health, "_check_database", AsyncMock(return_value=(True, None)))
+    monkeypatch.setattr(health, "_check_redis", AsyncMock(return_value=(True, {})))
+    monkeypatch.setattr(health, "check_ai_service_health", AsyncMock(return_value=False))
+    monkeypatch.setattr(settings, "SMS_API_KEY", "")
+    monkeypatch.setattr(settings, "TEXTLOCAL_API_KEY", "")
+    monkeypatch.setattr(settings, "TWILIO_SID", "")
+    monkeypatch.setattr(settings, "TWILIO_AUTH_TOKEN", "")
+    monkeypatch.setattr(settings, "TWILIO_PHONE_NUMBER", "")
+    monkeypatch.setattr(settings, "EMAIL_API_KEY", "")
+    monkeypatch.setattr(settings, "SENDGRID_API_KEY", "")
+
+    transport = ASGITransport(app=app, client=("192.0.2.202", 1234))
+    async with AsyncClient(transport=transport, base_url="http://localhost") as test_client:
+        response = await test_client.get("/health/detailed")
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["status"] == "ok"
+    assert body["dependencies"] == {"database": "reachable", "redis": "reachable"}
+    assert body["optional_dependencies"] == {
         "ai": "unreachable",
+        "sms": "not_configured",
+        "email": "not_configured",
     }
 
 

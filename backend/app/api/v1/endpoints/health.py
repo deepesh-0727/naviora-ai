@@ -111,14 +111,28 @@ async def detailed_health(request: Request):
     dependencies = {
         "database": "reachable" if database_ok else "unreachable",
         "redis": "reachable" if redis_ok else "unreachable",
-        "ai": "reachable" if ai_ok else "unreachable",
     }
-    status = "ok" if all((database_ok, redis_ok, ai_ok)) else "degraded"
+    sms_configured = bool(
+        settings.TEXTLOCAL_API_KEY
+        or (
+            settings.TWILIO_SID
+            and settings.TWILIO_AUTH_TOKEN
+            and settings.TWILIO_PHONE_NUMBER
+        )
+    )
+    email_configured = bool(settings.EMAIL_API_KEY or settings.SENDGRID_API_KEY)
+    optional_dependencies = {
+        "ai": "reachable" if ai_ok else "unreachable",
+        "sms": "configured" if sms_configured else "not_configured",
+        "email": "configured" if email_configured else "not_configured",
+    }
+    status = "ok" if database_ok and redis_ok else "degraded"
     return {
         "status": status,
         "version": "1.0.0",
         "uptime_seconds": round(time.monotonic() - _STARTED_AT, 3),
         "dependencies": dependencies,
+        "optional_dependencies": optional_dependencies,
     }
 
 
