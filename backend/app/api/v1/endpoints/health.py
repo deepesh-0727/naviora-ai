@@ -3,18 +3,19 @@
 import logging
 import platform
 import time
+from collections import OrderedDict, deque
 from importlib.metadata import PackageNotFoundError, version
+from threading import Lock
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 from sqlalchemy import text
 
 from app.api import deps
 from app.core.config import settings
 from app.core.metrics import WS_ACTIVE_CONNECTIONS
-from app.core.rate_limiter import limiter
 from app.utils.health_check import check_ai_service_health
 from app.db.session import SessionLocal, engine
 from app.models.user import User
@@ -22,6 +23,32 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 router = APIRouter()
 _STARTED_AT = time.monotonic()
+_DETAILED_HEALTH_REQUESTS: OrderedDict[str, deque[float]] = OrderedDict()
+_DETAILED_HEALTH_RATE_LIMIT_LOCK = Lock()
+_DETAILED_HEALTH_RATE_LIMIT = 10
+_DETAILED_HEALTH_RATE_WINDOW_SECONDS = 60
+_DETAILED_HEALTH_MAX_TRACKED_CLIENTS = 4096
+
+
+def _allow_detailed_health_request(client_host: str | None) -> bool:
+    now = time.monotonic()
+    host = client_host or "unknown"
+    cutoff = now - _DETAILED_HEALTH_RATE_WINDOW_SECONDS
+    with _DETAILED_HEALTH_RATE_LIMIT_LOCK:
+        requests = _DETAILED_HEALTH_REQUESTS.get(host)
+        if requests is None:
+            if len(_DETAILED_HEALTH_REQUESTS) >= _DETAILED_HEALTH_MAX_TRACKED_CLIENTS:
+                _DETAILED_HEALTH_REQUESTS.popitem(last=False)
+            requests = deque()
+            _DETAILED_HEALTH_REQUESTS[host] = requests
+        else:
+            _DETAILED_HEALTH_REQUESTS.move_to_end(host)
+        while requests and requests[0] <= cutoff:
+            requests.popleft()
+        if len(requests) >= _DETAILED_HEALTH_RATE_LIMIT:
+            return False
+        requests.append(now)
+        return True
 
 
 async def _check_database() -> tuple[bool, str | None]:
@@ -71,9 +98,13 @@ async def liveness():
 
 
 @router.get("/health/detailed", tags=["system"])
-@limiter.limit("10/minute")
-async def detailed_health(request: Request, response: Response):
+async def detailed_health(request: Request):
     """Return dependency reachability and uptime without exposing diagnostics."""
+    if not _allow_detailed_health_request(request.client.host if request.client else None):
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Detailed health request limit exceeded; retry in one minute."},
+        )
     database_ok, _ = await _check_database()
     redis_ok, _ = await _check_redis()
     ai_ok = await check_ai_service_health()
