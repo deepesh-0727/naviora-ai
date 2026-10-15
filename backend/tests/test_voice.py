@@ -62,7 +62,7 @@ async def test_voice_uses_rule_fallback_and_still_requests_booking_confirmation(
     monkeypatch.setattr(BaseAgent, "_call_ollama", raise_connection_error)
     monkeypatch.setattr(cache_service.cache_service, "get_cached_intent", no_cached_intent)
     monkeypatch.setattr(cache_service.cache_service, "set_cached_intent", ignore_cached_intent)
-    async def transcribe(_audio, language=None):
+    async def transcribe(_audio, language=None, content_type="audio/wav"):
         return "Book appointment with Dr. Sharma tomorrow at 9 AM"
 
     monkeypatch.setattr(stt_service.stt_service, "transcribe", transcribe)

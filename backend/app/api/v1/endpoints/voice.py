@@ -107,6 +107,7 @@ async def process_voice_command(
             audio_data=audio_bytes,
             session_context=session_context,
             background_tasks=background_tasks,
+            audio_content_type=content_type,
         )
     except HTTPException:
         raise

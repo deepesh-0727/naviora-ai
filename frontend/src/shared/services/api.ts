@@ -191,7 +191,15 @@ export const api = {
     getNavigationAmenities: () =>
       apiClient.get<{ pois?: Array<{ name: string; location: string }> }>(buildApiUrl('patient', '/navigation/amenities'), { params: { type: 'restroom' } }),
     processVoice: (form: FormData) =>
-      apiClient.post<{ text?: string; intent?: string; entities?: Record<string, unknown>; response_text?: string; response_audio_url?: string | null }>(
+      apiClient.post<{
+        text?: string;
+        intent?: string;
+        entities?: Record<string, unknown>;
+        response_text?: string;
+        response_audio_url?: string | null;
+        fallback_used?: boolean;
+        fallback_reason?: string | null;
+      }>(
         buildApiUrl('patient', '/voice/process'),
         form,
         { headers: { 'Content-Type': 'multipart/form-data' } }

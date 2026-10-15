@@ -1,94 +1,307 @@
 import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  FlatList,
+  Linking,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Audio } from 'expo-av';
-import { FlatList, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { api } from '../../shared/services/api';
-import { websocketClient } from '../../shared/services/websocket';
-import { BackendNotAvailable, Card, EmptyState, ErrorState, ScreenContainer, SectionHeader } from '../../shared/components';
+import {
+  BackendNotAvailable,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ScreenContainer,
+  SectionHeader,
+} from '../../shared/components';
 import { colors } from '../../shared/theme/colors';
 
-type VoiceResponse = { text?: string; intent?: string; entities?: Record<string, unknown>; response_text?: string; response_audio_url?: string | null };
-type Message = { id: string; role: 'user' | 'assistant'; text: string };
+type VoiceResponse = {
+  text?: string;
+  intent?: string;
+  entities?: Record<string, unknown>;
+  response_text?: string;
+  response_audio_url?: string | null;
+  fallback_used?: boolean;
+  fallback_reason?: string | null;
+};
+
+type Message = {
+  id: string;
+  role: 'user' | 'assistant' | 'error';
+  text: string;
+  fallbackUsed?: boolean;
+};
+
 type RequestError = { response?: { status?: number } };
+type ScreenStatus = 'idle' | 'recording' | 'processing';
 
 export default function VoiceAssistantScreen() {
   const [permission, setPermission] = useState<boolean | null>(null);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [status, setStatus] = useState<'idle' | 'recording' | 'processing'>('idle');
+  const [status, setStatus] = useState<ScreenStatus>('idle');
   const [messages, setMessages] = useState<Message[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [lastRecordingUri, setLastRecordingUri] = useState<string | null>(null);
+  const [screenError, setScreenError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
-  const sound = useRef<Audio.Sound | null>(null);
-  const requestId = useRef(0);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const pressedRef = useRef(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const listRef = useRef<FlatList<Message>>(null);
+  const nextMessageId = useRef(0);
+  const pulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    void Audio.requestPermissionsAsync().then(({ status: result }) => setPermission(result === 'granted')).catch(() => setPermission(false));
-    void websocketClient.connect();
-    const unsubscribe = websocketClient.subscribe('voice_result', (value: unknown) => {
-      if (typeof value !== 'object' || value === null) return;
-      const result = value as VoiceResponse;
-      if (result.response_text) setMessages((items) => [...items, { id: `ws-${Date.now()}`, role: 'assistant', text: result.response_text! }]);
-    });
-    return () => {
-      unsubscribe();
-      if (recording) void recording.stopAndUnloadAsync().catch(() => undefined);
-      if (sound.current) void sound.current.unloadAsync().catch(() => undefined);
-    };
+    if (status !== 'recording') {
+      pulse.stopAnimation();
+      pulse.setValue(1);
+      return undefined;
+    }
+
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.12, duration: 500, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulse, status]);
+
+  useEffect(() => {
+    if (messages.length) listRef.current?.scrollToEnd({ animated: true });
+  }, [messages]);
+
+  useEffect(() => () => {
+    const activeRecording = recordingRef.current;
+    recordingRef.current = null;
+    if (activeRecording) void activeRecording.stopAndUnloadAsync().catch(() => undefined);
+    if (soundRef.current) void soundRef.current.unloadAsync().catch(() => undefined);
   }, []);
 
-  const startRecording = async () => {
-    setError(null);
+  const addErrorMessage = (message: string) => {
+    setMessages((items) => [...items, {
+      id: `error-${++nextMessageId.current}`,
+      role: 'error',
+      text: message,
+    }]);
+  };
+
+  const playResponse = async (url?: string | null) => {
+    if (!url) return;
     try {
-      if (permission !== true) {
-        const result = await Audio.requestPermissionsAsync();
-        setPermission(result.status === 'granted');
-        if (result.status !== 'granted') return;
-      }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(result.recording);
-      setStatus('recording');
+      if (soundRef.current) await soundRef.current.unloadAsync();
+      const playback = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true });
+      soundRef.current = playback.sound;
     } catch {
-      setError('Could not start recording. Check microphone access and try again.');
+      setScreenError('The response was received, but its audio could not be played.');
     }
   };
 
-  const stopRecording = async () => {
-    if (!recording) return;
+  const uploadRecording = async (uri: string) => {
+    setStatus('processing');
+    setScreenError(null);
+    try {
+      const form = new FormData();
+      const extension = uri.split('?')[0].split('.').pop()?.toLowerCase() ?? 'm4a';
+      const audioType = extension === 'webm'
+        ? 'audio/webm'
+        : extension === '3gp'
+          ? 'audio/3gpp'
+          : extension === 'wav'
+            ? 'audio/wav'
+            : 'audio/m4a';
+      form.append('audio', {
+        uri,
+        name: `voice.${extension}`,
+        type: audioType,
+      } as unknown as Blob);
+
+      const { data } = await api.patient.processVoice(form);
+      const received = data as VoiceResponse;
+      const additions: Message[] = [];
+      if (received.text) {
+        additions.push({
+          id: `user-${++nextMessageId.current}`,
+          role: 'user',
+          text: received.text,
+        });
+      }
+      if (received.response_text) {
+        additions.push({
+          id: `assistant-${++nextMessageId.current}`,
+          role: 'assistant',
+          text: received.response_text,
+          fallbackUsed: received.fallback_used === true,
+        });
+      }
+      if (additions.length) setMessages((items) => [...items, ...additions]);
+      setStatus('idle');
+      await playResponse(received.response_audio_url);
+    } catch (cause: unknown) {
+      const code = (cause as RequestError).response?.status;
+      setStatus('idle');
+      if (code === 404 || code === 501) {
+        setUnavailable(true);
+      } else {
+        addErrorMessage('Something went wrong. Tap to retry.');
+      }
+    }
+  };
+
+  const startRecording = async () => {
+    setScreenError(null);
+    try {
+      let hasPermission = permission === true;
+      if (!hasPermission) {
+        const result = await Audio.requestPermissionsAsync();
+        hasPermission = result.status === 'granted';
+        setPermission(hasPermission);
+      }
+      if (!hasPermission) return;
+
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      recordingRef.current = result.recording;
+      setStatus('recording');
+      if (!pressedRef.current) void stopRecording(result.recording);
+    } catch {
+      setStatus('idle');
+      setScreenError('Could not start recording. Check microphone access and try again.');
+    }
+  };
+
+  const stopRecording = async (recording = recordingRef.current) => {
+    if (!recording || status === 'processing') return;
+    recordingRef.current = null;
     setStatus('processing');
     try {
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
-      setRecording(null);
       if (!uri) throw new Error('Recording file is unavailable');
-      const form = new FormData();
-      form.append('audio', { uri, name: 'voice-command.m4a', type: 'audio/m4a' } as unknown as Blob);
-      const result = await api.patient.processVoice(form);
-      const data = result.data;
-      setMessages((items) => [...items, ...(data.text ? [{ id: `u-${++requestId.current}`, role: 'user' as const, text: data.text }] : []), ...(data.response_text ? [{ id: `a-${++requestId.current}`, role: 'assistant' as const, text: data.response_text }] : [])]);
-      if (data.response_audio_url) {
-        if (sound.current) await sound.current.unloadAsync();
-        const played = await Audio.Sound.createAsync({ uri: data.response_audio_url }, { shouldPlay: true });
-        sound.current = played.sound;
-      }
+      setLastRecordingUri(uri);
+      await uploadRecording(uri);
+    } catch {
       setStatus('idle');
-    } catch (cause: unknown) {
-      const code = (cause as RequestError).response?.status;
-      if (code === 404 || code === 501) setUnavailable(true);
-      else setError('Voice processing failed. Please try again.');
-      setStatus('idle');
+      addErrorMessage('Something went wrong. Tap to retry.');
     }
   };
 
-  if (permission === false) return <ScreenContainer><SectionHeader title="Voice Assistant" /><Card style={styles.center}><Text style={styles.title}>Microphone access required</Text><Text style={styles.copy}>Allow microphone access to use voice commands.</Text><TouchableOpacity onPress={() => Platform.OS === 'ios' ? void Linking.openURL('app-settings:') : void Linking.openSettings()}><Text style={styles.link}>Open Settings</Text></TouchableOpacity></Card></ScreenContainer>;
-  if (unavailable) return <ScreenContainer><SectionHeader title="Voice Assistant" /><BackendNotAvailable endpoint="POST /voice/process" /></ScreenContainer>;
+  const retryLastRecording = () => {
+    if (lastRecordingUri) void uploadRecording(lastRecordingUri);
+  };
 
-  return <ScreenContainer style={styles.screen}>
-    <SectionHeader title="Voice Assistant" />
-    {error ? <ErrorState message={error} onRetry={() => setError(null)} /> : null}
-    {messages.length ? <FlatList data={messages} keyExtractor={(item) => item.id} renderItem={({ item }) => <View style={[styles.bubble, item.role === 'user' ? styles.user : styles.agent]}><Text style={item.role === 'user' ? styles.userText : styles.agentText}>{item.text}</Text></View>} /> : <EmptyState message="Speak to ask a question or request help." />}
-    <TouchableOpacity accessibilityRole="button" accessibilityLabel={status === 'recording' ? 'Stop recording' : 'Start recording'} disabled={status === 'processing' || permission === null} onPress={() => void (status === 'recording' ? stopRecording() : startRecording())} style={[styles.mic, status === 'recording' && styles.recording]}><Text style={styles.micText}>{status === 'recording' ? 'Stop' : status === 'processing' ? '…' : '🎙'}</Text></TouchableOpacity>
-    <Text style={styles.hint}>{status === 'recording' ? 'Listening · tap to finish' : status === 'processing' ? 'Processing…' : 'Tap to speak'}</Text>
-  </ScreenContainer>;
+  const handlePressIn = () => {
+    if (status !== 'idle') return;
+    pressedRef.current = true;
+    void startRecording();
+  };
+
+  const handlePressOut = () => {
+    pressedRef.current = false;
+    if (recordingRef.current) void stopRecording(recordingRef.current);
+  };
+
+  if (unavailable) {
+    return <ScreenContainer><SectionHeader title="Voice Assistant" /><BackendNotAvailable endpoint="POST /api/v1/voice/process" /></ScreenContainer>;
+  }
+
+  if (permission === false) {
+    return (
+      <ScreenContainer>
+        <SectionHeader title="Voice Assistant" />
+        <Card style={styles.permissionCard}>
+          <Text style={styles.title}>Microphone access required</Text>
+          <Text style={styles.copy}>Microphone access required. Open Settings to enable.</Text>
+          <Button
+            title="Open Settings"
+            onPress={() => Platform.OS === 'ios' ? void Linking.openURL('app-settings:') : void Linking.openSettings()}
+          />
+        </Card>
+      </ScreenContainer>
+    );
+  }
+
+  return (
+    <ScreenContainer style={styles.screen}>
+      <SectionHeader title="Voice Assistant" />
+      {screenError ? <Text accessibilityRole="alert" style={styles.screenError}>{screenError}</Text> : null}
+      {messages.length ? (
+        <FlatList
+          ref={listRef}
+          style={styles.conversation}
+          contentContainerStyle={styles.conversationContent}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          renderItem={({ item }) => (
+            <View style={[
+              styles.bubble,
+              item.role === 'user' ? styles.userBubble : item.role === 'error' ? styles.errorBubble : styles.agentBubble,
+            ]}>
+              {item.fallbackUsed ? <Badge label="Rule mode" color="#7A828C" /> : null}
+              <Text style={item.role === 'user' ? styles.userText : item.role === 'error' ? styles.errorText : styles.agentText}>
+                {item.text}
+              </Text>
+              {item.role === 'error' && lastRecordingUri
+                ? <Button title="Retry" variant="secondary" onPress={retryLastRecording} style={styles.retryButton} />
+                : null}
+            </View>
+          )}
+        />
+      ) : (
+        <View style={styles.empty}><EmptyState message="Hold the microphone and speak to request help." /></View>
+      )}
+
+      <View style={styles.controls}>
+        {status === 'processing' ? <ActivityIndicator size="large" color={colors.primary} style={styles.spinner} /> : null}
+        <Animated.View style={{ transform: [{ scale: pulse }] }}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={status === 'recording' ? 'Recording. Release to send.' : 'Hold to record a voice request'}
+            disabled={status === 'processing'}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            style={[styles.mic, status === 'recording' && styles.recording]}
+          >
+            <Text style={styles.micText}>{status === 'recording' ? '●' : '🎙'}</Text>
+          </TouchableOpacity>
+        </Animated.View>
+        <Text style={styles.hint}>
+          {status === 'recording' ? 'Recording… release to send' : status === 'processing' ? 'Uploading and processing…' : 'Hold to speak'}
+        </Text>
+      </View>
+    </ScreenContainer>
+  );
 }
 
-const styles = StyleSheet.create({ screen: { flex: 1 }, center: { alignItems: 'center' }, title: { fontSize: 18, fontWeight: '700', color: colors.text }, copy: { color: colors.textMuted, marginVertical: 12, textAlign: 'center' }, link: { color: colors.primary, fontWeight: '700', padding: 12 }, bubble: { maxWidth: '82%', padding: 12, borderRadius: 14, marginVertical: 5 }, user: { alignSelf: 'flex-end', backgroundColor: colors.primary }, agent: { alignSelf: 'flex-start', backgroundColor: colors.white }, userText: { color: '#fff' }, agentText: { color: colors.text }, mic: { alignSelf: 'center', width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, marginTop: 12 }, recording: { backgroundColor: colors.danger }, micText: { color: '#fff', fontWeight: '700', fontSize: 18 }, hint: { textAlign: 'center', color: colors.textMuted, padding: 8 } });
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  empty: { flex: 1 },
+  conversation: { flex: 1 },
+  conversationContent: { paddingBottom: 12 },
+  permissionCard: { alignItems: 'center' },
+  title: { fontSize: 18, fontWeight: '700', color: colors.text },
+  copy: { color: colors.textMuted, marginVertical: 12, textAlign: 'center' },
+  screenError: { color: colors.danger, textAlign: 'center', marginBottom: 8 },
+  bubble: { maxWidth: '84%', padding: 12, borderRadius: 14, marginVertical: 5 },
+  userBubble: { alignSelf: 'flex-end', backgroundColor: colors.primary },
+  agentBubble: { alignSelf: 'flex-start', backgroundColor: colors.white },
+  errorBubble: { alignSelf: 'flex-start', backgroundColor: '#FFF0F0', borderColor: colors.danger, borderWidth: 1 },
+  userText: { color: colors.white },
+  agentText: { color: colors.text },
+  errorText: { color: colors.danger },
+  retryButton: { marginTop: 10 },
+  controls: { alignItems: 'center', paddingBottom: 8, paddingTop: 12 },
+  spinner: { marginBottom: 10 },
+  mic: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
+  recording: { backgroundColor: colors.danger },
+  micText: { color: colors.white, fontWeight: '700', fontSize: 24 },
+  hint: { textAlign: 'center', color: colors.textMuted, padding: 8 },
+});

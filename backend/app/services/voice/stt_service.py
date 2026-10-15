@@ -1,5 +1,6 @@
 import httpx
 import logging
+import mimetypes
 from typing import Optional
 from app.core.config import settings
 
@@ -9,11 +10,26 @@ class STTService:
     def __init__(self, api_url: str = settings.WHISPER_API_URL):
         self.api_url = api_url
 
-    async def transcribe(self, audio_data: bytes, language: Optional[str] = None) -> Optional[str]:
+    async def transcribe(
+        self,
+        audio_data: bytes,
+        language: Optional[str] = None,
+        content_type: str = "audio/wav",
+    ) -> Optional[str]:
         """
         Transcribe audio bytes using the Whisper API.
         """
-        files = {"file": ("audio.wav", audio_data, "audio/wav")}
+        normalized_type = (content_type or "audio/wav").split(";", maxsplit=1)[0].strip().lower()
+        extension = {
+            "audio/m4a": ".m4a",
+            "audio/mp4": ".m4a",
+            "audio/3gpp": ".3gp",
+            "audio/webm": ".webm",
+            "audio/ogg": ".ogg",
+            "audio/wav": ".wav",
+            "audio/x-wav": ".wav",
+        }.get(normalized_type, mimetypes.guess_extension(normalized_type) or ".wav")
+        files = {"file": (f"audio{extension}", audio_data, normalized_type)}
         data = {"language": language} if language else {}
 
         try:

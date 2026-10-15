@@ -287,6 +287,7 @@ class VoiceOrchestrator:
         audio_data: bytes,
         session_context: Dict[str, Any],
         background_tasks: BackgroundTasks | None = None,
+        audio_content_type: str = "audio/wav",
     ) -> Dict[str, Any]:
         """
         The full Voice-to-Action loop.
@@ -296,7 +297,7 @@ class VoiceOrchestrator:
         4. Response Text -> Audio (TTS)
         """
         # 1. Speech to Text
-        text_query = await stt_service.transcribe(audio_data)
+        text_query = await stt_service.transcribe(audio_data, content_type=audio_content_type)
         if not text_query:
             return {"error": "Could not transcribe audio"}
 
