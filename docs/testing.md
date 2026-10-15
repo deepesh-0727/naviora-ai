@@ -32,11 +32,11 @@ the 50% target.
 
 ## Coverage policy and current status
 
-- Backend overall gate: 70% (the current local run is 59%, so CI will fail until more
+- Backend overall gate: 70% (the current local run is 60%, so CI will fail until more
   application code is covered).
 - Backend services: 64% combined, below the requested 80% target. `queue_service.py`
   is at 90% and the queue endpoint module is at 87%.
-- Latest backend run: 121 passed, 8 skipped, with zero failures. The 8 skips are the
+- Latest backend run: 128 passed, 8 skipped, with zero failures. The 8 skips are the
   Redis-dependent integration journeys that require a verified dedicated test Redis.
 - Frontend Jest: 17 tests pass across 8 suites. In the current full hooks/services
   inventory, statement coverage is 21.75%; the modules exercised by the new tests

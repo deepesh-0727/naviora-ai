@@ -1,4 +1,4 @@
-Backend coverage after Fix 2: queue endpoint coverage
+Backend coverage after Fix 3: WebSocket endpoint coverage
 Name                                                          Stmts   Miss  Cover
 ---------------------------------------------------------------------------------
 backend\app\agents\base_agent.py                                 73     48    34%
@@ -53,7 +53,7 @@ backend\app\api\v1\endpoints\staff\profile_base.py               52     31    40
 backend\app\api\v1\endpoints\staff\queue.py                      96     72    25%
 backend\app\api\v1\endpoints\staff\settings.py                   55     29    47%
 backend\app\api\v1\endpoints\voice.py                           130     88    32%
-backend\app\api\v1\endpoints\websocket.py                       116     96    17%
+backend\app\api\v1\endpoints\websocket.py                       116     35    70%
 backend\app\api\v1\router.py                                     21      0   100%
 backend\app\core\config.py                                       74      6    92%
 backend\app\core\encryption.py                                   48      8    83%
@@ -64,7 +64,7 @@ backend\app\core\middleware.py                                   25      0   100
 backend\app\core\monitoring.py                                   48     13    73%
 backend\app\core\rate_limiter.py                                 11      5    55%
 backend\app\core\rbac.py                                         46     19    59%
-backend\app\core\security.py                                     31     10    68%
+backend\app\core\security.py                                     31      4    87%
 backend\app\core\sentry.py                                       14      2    86%
 backend\app\db\base.py                                           16      0   100%
 backend\app\db\base_class.py                                     12      7    42%
@@ -116,4 +116,4 @@ backend\app\services\voice\voice_orchestrator.py                 22      7    68
 backend\app\services\ws_manager.py                              259     37    86%
 backend\app\utils\logger.py                                      20      0   100%
 ---------------------------------------------------------------------------------
-TOTAL                                                          5938   2423    59%
+TOTAL                                                          5938   2356    60%
