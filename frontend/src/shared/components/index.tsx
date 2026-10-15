@@ -5,17 +5,19 @@ export const Button = ({
   title,
   onPress,
   disabled,
+  loading = false,
   variant = 'primary',
   style,
 }: {
   title: string;
   onPress?: () => void;
   disabled?: boolean;
+  loading?: boolean;
   variant?: 'primary' | 'secondary' | 'danger';
   style?: ViewStyle;
 }) => (
   <TouchableOpacity
-    disabled={disabled}
+    disabled={disabled || loading}
     accessibilityRole="button"
     onPress={onPress}
     style={[
@@ -26,7 +28,10 @@ export const Button = ({
       style,
     ]}
   >
-    <Text style={styles.buttonText}>{title}</Text>
+    <View style={styles.buttonContent}>
+      {loading ? <ActivityIndicator size="small" color={variant === 'secondary' ? '#1C1F24' : '#fff'} style={styles.buttonSpinner} /> : null}
+      <Text style={styles.buttonText}>{title}</Text>
+    </View>
   </TouchableOpacity>
 );
 
@@ -147,6 +152,8 @@ export const InfoRow = ({ label, value }: { label: string; value?: string | null
 
 const styles = StyleSheet.create({
   button: { backgroundColor: '#1D8A6C', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 18, alignItems: 'center' },
+  buttonContent: { flexDirection: 'row', alignItems: 'center' },
+  buttonSpinner: { marginRight: 8 },
   secondary: { backgroundColor: '#EAF9F3' },
   danger: { backgroundColor: '#D94A4A' },
   disabled: { opacity: 0.5 },

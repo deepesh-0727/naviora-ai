@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
 
-import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Loader, ScreenContainer, SectionHeader } from '../../shared/components';
+import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Loader, ScreenContainer, SectionHeader, Toast } from '../../shared/components';
 import { apiClient, buildApiUrl } from '../../shared/services/api';
 import { useDoctorQueue } from '../hooks/useDoctorQueue';
 import type { DoctorQueueEntry } from '../hooks/useDoctorQueue';
@@ -20,17 +20,25 @@ function display(entry: DoctorQueueEntry, keys: string[]): string {
 export default function DoctorQueue() {
   const navigation = useNavigation<DoctorNavigation>();
   const { queue, loading, error, backendUnavailable, empty, refresh } = useDoctorQueue();
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ appointmentId: string; action: 'in_room' | 'completed' | 'no-show' | 'up' } | null>(null);
 
-  const updateEntry = async (entry: DoctorQueueEntry, action: 'status' | 'no-show' | 'up') => {
+  useEffect(() => {
+    if (!actionToast) return undefined;
+    const timeout = setTimeout(() => setActionToast(null), 4000);
+    return () => clearTimeout(timeout);
+  }, [actionToast]);
+
+  const updateEntry = async (entry: DoctorQueueEntry, action: 'status' | 'no-show' | 'up', status?: 'in_room' | 'completed') => {
     const id = display(entry, ['id', 'appointment_id']);
-    if (id === '—') return;
-    setBusyId(id);
-    setActionError(null);
+    if (id === '—' || pendingAction) return;
+    const pendingName = action === 'status' ? status : action;
+    if (!pendingName) return;
+    setPendingAction({ appointmentId: id, action: pendingName });
+    setActionToast(null);
     try {
       if (action === 'status') {
-        await apiClient.put(buildApiUrl('doctor', `/queue/${encodeURIComponent(id)}/status`), { status: 'in_room' });
+        await apiClient.put(buildApiUrl('doctor', `/queue/${encodeURIComponent(id)}/status`), { status });
       } else if (action === 'no-show') {
         await apiClient.post(buildApiUrl('doctor', `/queue/${encodeURIComponent(id)}/no-show`));
       } else {
@@ -41,12 +49,24 @@ export default function DoctorQueue() {
       }
       await refresh();
     } catch (reason: unknown) {
-      const status = typeof reason === 'object' && reason !== null && 'response' in reason
-        ? (reason as { response?: { status?: number } }).response?.status
+      const response = typeof reason === 'object' && reason !== null && 'response' in reason
+        ? (reason as { response?: { status?: number; data?: { detail?: unknown; message?: unknown } } }).response
         : undefined;
-      setActionError(status === 404 || status === 501 ? 'This queue action is not available on the backend yet.' : 'Could not update the queue. Retry the action.');
+      const detail = response?.data?.detail;
+      const message = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((item) => typeof item === 'object' && item !== null && 'msg' in item ? String(item.msg) : String(item)).join('; ')
+          : typeof response?.data?.message === 'string'
+            ? response.data.message
+            : response?.status === 401
+              ? 'Your session has expired. Please sign in again.'
+              : response?.status
+                ? `Queue update failed (${response.status}). Please retry.`
+                : 'Could not reach the server. Check your connection and retry.';
+      setActionToast(message);
     } finally {
-      setBusyId(null);
+      setPendingAction(null);
     }
   };
 
@@ -57,7 +77,7 @@ export default function DoctorQueue() {
   return (
     <ScreenContainer>
       <SectionHeader title="Doctor Queue" />
-      {actionError ? <Card style={{ marginBottom: 12 }}><Text style={{ color: '#B42318' }}>{actionError}</Text><Button title="Dismiss" variant="secondary" onPress={() => setActionError(null)} /></Card> : null}
+      {actionToast ? <Toast message={actionToast} /> : null}
       {empty ? <EmptyState message="No patients are waiting." /> : (
         <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
           {queue.map((entry, index) => {
@@ -67,10 +87,22 @@ export default function DoctorQueue() {
                 <Text style={{ fontWeight: '700', fontSize: 16 }}>#{display(entry, ['position', 'queue_position'])} · Patient {display(entry, ['patient_id'])}</Text>
                 <Text style={{ color: '#5F6975', marginVertical: 8 }}>Status: {display(entry, ['status'])} · Priority: {display(entry, ['priority'])}</Text>
                 <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                  <Button title="Move up" variant="secondary" disabled={busyId === id || index === 0} onPress={() => void updateEntry(entry, 'up')} />
-                  <Button title="View patient" variant="secondary" onPress={() => navigation.navigate('PatientDetail', { patientId: display(entry, ['patient_id']) })} />
-                  <Button title="In room" disabled={busyId === id} onPress={() => void updateEntry(entry, 'status')} />
-                  <Button title="No-show" variant="danger" disabled={busyId === id} onPress={() => void updateEntry(entry, 'no-show')} />
+                  <Button title="Move up" variant="secondary" disabled={Boolean(pendingAction) || index === 0} onPress={() => void updateEntry(entry, 'up')} />
+                  <Button title="View patient" variant="secondary" disabled={Boolean(pendingAction)} onPress={() => navigation.navigate('PatientDetail', { patientId: display(entry, ['patient_id']) })} />
+                  <Button
+                    title="Mark In-Room"
+                    loading={pendingAction?.appointmentId === id && pendingAction.action === 'in_room'}
+                    disabled={Boolean(pendingAction)}
+                    onPress={() => void updateEntry(entry, 'status', 'in_room')}
+                  />
+                  <Button
+                    title="Mark Complete"
+                    variant="secondary"
+                    loading={pendingAction?.appointmentId === id && pendingAction.action === 'completed'}
+                    disabled={Boolean(pendingAction)}
+                    onPress={() => void updateEntry(entry, 'status', 'completed')}
+                  />
+                  <Button title="No-show" variant="danger" disabled={Boolean(pendingAction)} onPress={() => void updateEntry(entry, 'no-show')} />
                 </View>
               </Card>
             );
