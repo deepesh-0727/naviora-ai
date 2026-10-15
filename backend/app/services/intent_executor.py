@@ -1,4 +1,6 @@
-from datetime import datetime, timezone
+import calendar
+import re
+from datetime import date, datetime, time, timedelta, timezone
 from difflib import get_close_matches
 from typing import Any
 
@@ -123,6 +125,20 @@ class IntentExecutor:
             if normalized_query in self._normalize_name(f"{row[0].first_name} {row[0].last_name}")
         ]
         if not matched_rows:
+            scored_rows = []
+            for row in doctor_rows:
+                full_name = self._normalize_name(f"{row[0].first_name} {row[0].last_name}")
+                last_name = self._normalize_name(row[0].last_name)
+                score = max(
+                    self._similarity(normalized_query, full_name),
+                    self._similarity(normalized_query, last_name),
+                )
+                if score >= 0.72:
+                    scored_rows.append((score, row))
+            if scored_rows:
+                best_score = max(score for score, _row in scored_rows)
+                matched_rows = [row for score, row in scored_rows if best_score - score <= 0.03]
+        if not matched_rows:
             doctor_name_pairs = [
                 (row, self._normalize_name(f"Dr. {row[0].first_name} {row[0].last_name}"))
                 for row in doctor_rows
@@ -212,21 +228,119 @@ class IntentExecutor:
         return [cls._doctor_label(doctor, department) for doctor, department in rows]
 
     @staticmethod
-    def _requested_slot(partial_intent: dict[str, str | None]) -> datetime | None:
+    def _similarity(left: str, right: str) -> float:
+        from difflib import SequenceMatcher
+
+        return SequenceMatcher(None, left, right).ratio()
+
+    @staticmethod
+    def _requested_slot(
+        partial_intent: dict[str, str | None],
+        *,
+        today: date | None = None,
+    ) -> datetime | None:
+        """Parse explicit dates and common spoken date/time phrases conservatively."""
         preferred = partial_intent.get("preferred_time")
+        requested_date = partial_intent.get("date")
+        requested_time = partial_intent.get("time")
+        today = today or datetime.now(timezone.utc).date()
+
         if preferred:
             try:
                 return datetime.fromisoformat(preferred.replace("Z", "+00:00"))
             except ValueError:
-                pass
+                preferred_text = re.sub(r"\b(the|on|at|around|about)\b", " ", preferred.casefold())
+                preferred_text = " ".join(preferred_text.split())
+                preferred_day = IntentExecutor._parse_date(preferred_text, today)
+                preferred_clock = IntentExecutor._parse_time(preferred_text)
+                if preferred_day is not None and preferred_clock is not None:
+                    return datetime.combine(preferred_day, preferred_clock)
+                requested_date = f"{requested_date or ''} {preferred}".strip()
 
-        requested_date = partial_intent.get("date")
-        requested_time = partial_intent.get("time")
-        if requested_date and requested_time:
+        combined = f"{requested_date or ''} {requested_time or ''}".strip()
+        if not combined:
+            return None
+
+        normalized = re.sub(r"[,]+", " ", combined.casefold())
+        normalized = re.sub(r"\b(the|on|at|around|about)\b", " ", normalized)
+        normalized = " ".join(normalized.split())
+        requested_day = IntentExecutor._parse_date(normalized, today)
+        requested_clock = IntentExecutor._parse_time(normalized)
+        if requested_day is None or requested_clock is None:
+            return None
+        return datetime.combine(requested_day, requested_clock)
+
+    @staticmethod
+    def _parse_date(value: str, today: date) -> date | None:
+        if "day after tomorrow" in value:
+            return today + timedelta(days=2)
+        if "tomorrow" in value:
+            return today + timedelta(days=1)
+        if "today" in value:
+            return today
+
+        for weekday in calendar.day_name:
+            if re.search(rf"\b{weekday.casefold()}\b", value):
+                target = list(calendar.day_name).index(weekday)
+                days_ahead = (target - today.weekday()) % 7 or 7
+                return today + timedelta(days=days_ahead)
+
+        iso_match = re.search(r"\b(20\d{2}-\d{1,2}-\d{1,2})\b", value)
+        if iso_match:
             try:
-                return datetime.fromisoformat(f"{requested_date}T{requested_time}")
+                return date.fromisoformat(iso_match.group(1))
             except ValueError:
-                pass
+                return None
+
+        month_match = re.search(
+            r"\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?\b",
+            value,
+        )
+        if month_match:
+            month_name, day_text = month_match.groups()
+            try:
+                month = datetime.strptime(month_name[:3].title(), "%b").month
+                candidate = date(today.year, month, int(day_text))
+                if candidate < today:
+                    candidate = date(today.year + 1, month, int(day_text))
+                return candidate
+            except ValueError:
+                return None
+
+        day_match = re.search(r"\b(\d{1,2})(?:st|nd|rd|th)\b", value)
+        if day_match:
+            day_number = int(day_match.group(1))
+            year, month = today.year, today.month
+            if day_number < today.day:
+                month += 1
+                if month > 12:
+                    month, year = 1, year + 1
+            try:
+                return date(year, month, day_number)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _parse_time(value: str) -> time | None:
+        if re.search(r"\bnoon\b", value):
+            return time(12, 0)
+        if re.search(r"\bmidnight\b", value):
+            return time(0, 0)
+
+        meridiem = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b", value)
+        if meridiem:
+            hour, minute, marker = meridiem.groups()
+            hour, minute = int(hour), int(minute or 0)
+            is_pm = marker.startswith("p")
+            if not 1 <= hour <= 12 or minute > 59:
+                return None
+            hour = hour % 12 + (12 if is_pm else 0)
+            return time(hour, minute)
+
+        military = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", value)
+        if military:
+            return time(int(military.group(1)), int(military.group(2)))
         return None
 
     @staticmethod

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.voice.stt_service import stt_service
 from app.services.voice.tts_service import tts_service
 from app.agents.hospital_brain import HospitalBrain
-from app.services.intent_executor import intent_executor
+from app.services.intent_executor import IntentExecutor, intent_executor
 from app.models.user import User
 from app.models.appointment import Appointment
 from app.models.doctor import Department, Doctor
@@ -23,14 +23,21 @@ from app.services.ws_manager import ws_manager
 logger = logging.getLogger(__name__)
 
 class VoiceOrchestrator:
+    _NEW_REQUEST_WORDS = (
+        "appointment", "book", "schedule", "reschedule", "emergency", "sos",
+        "directions", "where is", "pharmacy", "prescription", "visiting hours", "cancel",
+        "hospital hours", "billing", "invoice",
+    )
+
     def __init__(self):
         self.brain = HospitalBrain()
         self.session_factory = SessionLocal
 
     @staticmethod
     def _confirmation_decision(text: str) -> str | None:
-        normalized = re.sub(r"[^a-z\s']", " ", text.casefold())
-        normalized = " ".join(normalized.split()).replace("’", "'")
+        normalized = text.casefold().replace("’", "'")
+        normalized = re.sub(r"[^a-z\s']", " ", normalized)
+        normalized = " ".join(normalized.split())
         affirmative = {
             "yes", "yeah", "yep", "sure", "confirm", "confirm booking",
             "yes please", "yes confirm", "yes confirm booking", "yes book it",
@@ -45,6 +52,11 @@ class VoiceOrchestrator:
         if normalized in negative:
             return "cancel"
         return None
+
+    @classmethod
+    def _is_new_request(cls, text: str) -> bool:
+        normalized = text.casefold()
+        return any(word in normalized for word in cls._NEW_REQUEST_WORDS)
 
     async def process_text_turn(
         self,
@@ -80,11 +92,94 @@ class VoiceOrchestrator:
         if pending:
             # A non-confirmation utterance is a new request; do not retain stale intent.
             await voice_pending_service.clear_pending(user.id)
+            await voice_pending_service.clear_resolution(user.id)
+
+        resolution = await voice_pending_service.get_resolution(user.id)
+        if resolution and self._confirmation_decision(text) == "cancel":
+            await voice_pending_service.clear_resolution(user.id)
+            return {
+                "intent": "appointment", "confidence": 1.0, "entities": {},
+                "appointment_result": {"needs_clarification": False, "cancelled": True},
+            }, "The appointment request is cancelled. Nothing was booked."
+        if resolution and not self._is_new_request(text):
+            prior = resolution.get("partial_intent") or {}
+            partial = dict(prior) if isinstance(prior, dict) else {}
+            doctor_name = partial.get("doctor_name")
+            candidates = resolution.get("candidates") or []
+            if not doctor_name:
+                partial["doctor_name"] = text.strip()
+            elif candidates and any(
+                text.casefold() in str(candidate).casefold() for candidate in candidates
+            ):
+                chosen = next(
+                    (str(candidate) for candidate in candidates if text.casefold() in str(candidate).casefold()),
+                    text,
+                )
+                doctor_label, _, department = chosen.partition(" — ")
+                partial["doctor_name"] = doctor_label
+                if department:
+                    partial["department_name"] = department
+            else:
+                partial["preferred_time"] = text.strip()
+
+            resumed_analysis = {
+                "intent": "appointment",
+                "confidence": 0.9,
+                "entities": {
+                    "doctor": partial.get("doctor_name"),
+                    "department": partial.get("department_name"),
+                    "date": partial.get("date"),
+                    "time": partial.get("time"),
+                    "symptoms": partial.get("symptoms"),
+                },
+                "specialized_details": {"preferred_time": partial.get("preferred_time")},
+            }
+            execution_result = await intent_executor.execute(db, user, resumed_analysis)
+            if isinstance(execution_result, dict):
+                if execution_result.get("needs_confirmation") and execution_result.get("booking_proposal"):
+                    await voice_pending_service.clear_resolution(user.id)
+                    await voice_pending_service.set_pending(user.id, execution_result["booking_proposal"])
+                    execution_result = {
+                        **execution_result,
+                        "response_text": (
+                            f"{execution_result.get('response_text', '').strip()} "
+                            "Confirm booking? Say yes to confirm or no to cancel."
+                        ).strip(),
+                    }
+                elif execution_result.get("needs_clarification"):
+                    failures = int(resolution.get("failed_time_parses", 0))
+                    attempted_time = bool(
+                        partial.get("preferred_time") or partial.get("date") or partial.get("time")
+                    )
+                    if (
+                        partial.get("doctor_name")
+                        and attempted_time
+                        and IntentExecutor._requested_slot(partial) is None
+                    ):
+                        failures += 1
+                        if failures >= 2:
+                            await voice_pending_service.clear_resolution(user.id)
+                            return {
+                                "intent": "appointment", "confidence": 0.9, "entities": {},
+                                "appointment_result": {"needs_clarification": True, "time_parse_failures": failures},
+                            }, "Let me connect you to reception."
+                    await voice_pending_service.set_resolution(user.id, {
+                        "partial_intent": execution_result.get("partial_intent", partial),
+                        "candidates": execution_result.get("candidates", []),
+                        "failed_time_parses": failures,
+                    })
+                response_text = str(execution_result.get("response_text") or "")
+                return {**resumed_analysis, "appointment_result": execution_result}, response_text
+
+        if resolution:
+            # A clearly different command supersedes the old clarification context.
+            await voice_pending_service.clear_resolution(user.id)
 
         analysis = await self.brain.execute(text, session_context)
         execution_result = await intent_executor.execute(db, user, analysis)
         if isinstance(execution_result, dict):
             if execution_result.get("needs_confirmation") and execution_result.get("booking_proposal"):
+                await voice_pending_service.clear_resolution(user.id)
                 await voice_pending_service.set_pending(user.id, execution_result["booking_proposal"])
                 execution_result = {
                     **execution_result,
@@ -93,6 +188,19 @@ class VoiceOrchestrator:
                         "Confirm booking? Say yes to confirm or no to cancel."
                     ).strip(),
                 }
+            elif analysis.get("intent") == "appointment" and execution_result.get("needs_clarification"):
+                partial = execution_result.get("partial_intent") or {}
+                requested_slot = IntentExecutor._requested_slot(partial)
+                attempts = 1 if (
+                    partial.get("doctor_name")
+                    and (partial.get("date") or partial.get("time") or partial.get("preferred_time"))
+                    and requested_slot is None
+                ) else 0
+                await voice_pending_service.set_resolution(user.id, {
+                    "partial_intent": partial,
+                    "candidates": execution_result.get("candidates", []),
+                    "failed_time_parses": attempts,
+                })
             response_text = str(execution_result.get("response_text") or "")
             analysis = {**analysis, "appointment_result": execution_result}
         else:
