@@ -1,3 +1,4 @@
+Backend coverage after Fix 1: queue_service coverage
 Name                                                          Stmts   Miss  Cover
 ---------------------------------------------------------------------------------
 backend\app\agents\base_agent.py                                 73     48    34%
@@ -108,11 +109,11 @@ backend\app\services\notification\sms_service.py                 46     34    26
 backend\app\services\otp_service.py                              54      5    91%
 backend\app\services\payment\payment_service.py                  31     17    45%
 backend\app\services\pharmacy\pharmacy_service.py                47     32    32%
-backend\app\services\queue_service.py                           202    141    30%
+backend\app\services\queue_service.py                           202     20    90%
 backend\app\services\voice\stt_service.py                        23     13    43%
 backend\app\services\voice\tts_service.py                        27     16    41%
 backend\app\services\voice\voice_orchestrator.py                 22      7    68%
 backend\app\services\ws_manager.py                              259     37    86%
 backend\app\utils\logger.py                                      20      0   100%
 ---------------------------------------------------------------------------------
-TOTAL                                                          5938   2611    56%
+TOTAL                                                          5938   2490    58%
