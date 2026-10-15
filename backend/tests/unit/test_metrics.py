@@ -39,6 +39,8 @@ def test_metrics_endpoint_exports_custom_metrics(client):
     response = client.get("/metrics")
 
     assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "# HELP naviora_voice_requests_total" in response.text
     assert "naviora_voice_requests_total" in response.text
     assert "naviora_emergency_triggers_total" in response.text
     assert "naviora_ws_active_connections" in response.text
