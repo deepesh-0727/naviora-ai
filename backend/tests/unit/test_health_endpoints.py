@@ -10,6 +10,8 @@ from app.core.config import settings
 from app.core.security import create_access_token
 from app.main import app
 from app.models.user import User
+from app.core.rate_limiter import limiter
+from app.utils import health_check
 
 
 class HealthyRedis:
@@ -137,3 +139,81 @@ async def test_debug_sentry_captures_event_when_configured(db_session, monkeypat
     finally:
         sentry_sdk.flush(timeout=2)
         sentry_sdk.init(dsn=None)
+
+
+@pytest.mark.asyncio
+async def test_detailed_health_reports_dependency_status_and_uptime(monkeypatch):
+    monkeypatch.setattr(limiter, "enabled", False)
+    monkeypatch.setattr(health, "_check_database", AsyncMock(return_value=(True, None)))
+    monkeypatch.setattr(health, "_check_redis", AsyncMock(return_value=(True, {"redis_version": "7.2.0"})))
+    monkeypatch.setattr(health, "check_ai_service_health", AsyncMock(return_value=True))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as test_client:
+        response = await test_client.get("/health/detailed")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["version"] == "1.0.0"
+    assert body["uptime_seconds"] >= 0
+    assert body["dependencies"] == {"database": "reachable", "redis": "reachable", "ai": "reachable"}
+
+
+@pytest.mark.asyncio
+async def test_detailed_health_reports_degraded_dependencies(monkeypatch):
+    monkeypatch.setattr(limiter, "enabled", False)
+    monkeypatch.setattr(health, "_check_database", AsyncMock(return_value=(True, None)))
+    monkeypatch.setattr(health, "_check_redis", AsyncMock(return_value=(False, None)))
+    monkeypatch.setattr(health, "check_ai_service_health", AsyncMock(return_value=False))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as test_client:
+        response = await test_client.get("/health/detailed")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+    assert response.json()["dependencies"] == {
+        "database": "reachable",
+        "redis": "unreachable",
+        "ai": "unreachable",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ai_health_does_not_treat_configured_openai_key_as_reachability(monkeypatch):
+    class UnavailableClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, *_args, **_kwargs):
+            return type("Response", (), {"status_code": 503})()
+
+    monkeypatch.setattr(settings, "AI_PROVIDER", "openai")
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "configured-test-key")
+    monkeypatch.setattr(health_check.httpx, "AsyncClient", lambda **_kwargs: UnavailableClient())
+
+    assert await health_check.check_ai_service_health() is False
+
+
+@pytest.mark.asyncio
+async def test_detailed_health_rate_limits_public_requests(monkeypatch):
+    from limits.storage import MemoryStorage
+    from limits.strategies import FixedWindowRateLimiter
+
+    monkeypatch.setattr(health, "_check_database", AsyncMock(return_value=(True, None)))
+    monkeypatch.setattr(health, "_check_redis", AsyncMock(return_value=(True, {})))
+    monkeypatch.setattr(health, "check_ai_service_health", AsyncMock(return_value=True))
+    memory_storage = MemoryStorage()
+    monkeypatch.setattr(limiter, "_storage", memory_storage)
+    monkeypatch.setattr(limiter, "_limiter", FixedWindowRateLimiter(memory_storage))
+
+    transport = ASGITransport(app=app, client=("192.0.2.201", 1234))
+    async with AsyncClient(transport=transport, base_url="http://localhost") as test_client:
+        responses = [await test_client.get("/health/detailed") for _ in range(11)]
+
+    assert all(response.status_code == 200 for response in responses[:10]), [
+        (response.status_code, response.text) for response in responses
+    ]
+    assert responses[10].status_code == 429

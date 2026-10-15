@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from redis.asyncio import Redis
 from sqlalchemy import text
 
@@ -72,7 +72,7 @@ async def liveness():
 
 @router.get("/health/detailed", tags=["system"])
 @limiter.limit("10/minute")
-async def detailed_health(request: Request):
+async def detailed_health(request: Request, response: Response):
     """Return dependency reachability and uptime without exposing diagnostics."""
     database_ok, _ = await _check_database()
     redis_ok, _ = await _check_redis()

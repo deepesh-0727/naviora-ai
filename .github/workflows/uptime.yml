@@ -1,0 +1,52 @@
+name: Uptime check
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate health check URL
+        env:
+          RENDER_BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL }}
+        run: |
+          if [[ -z "$RENDER_BACKEND_URL" || ! "$RENDER_BACKEND_URL" =~ ^https:// ]]; then
+            echo "::error title=Invalid configuration::Set RENDER_BACKEND_URL to the HTTPS service base URL."
+            exit 1
+          fi
+
+      - name: Check liveness three times
+        id: health
+        env:
+          RENDER_BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL }}
+        run: |
+          for attempt in 1 2 3; do
+            if curl --fail --silent --show-error --max-time 20 "$RENDER_BACKEND_URL/health"; then
+              echo "Health endpoint returned HTTP 200 on attempt $attempt."
+              exit 0
+            fi
+            echo "Health check attempt $attempt of 3 failed."
+            if [[ "$attempt" -lt 3 ]]; then sleep 10; fi
+          done
+          exit 1
+
+      - name: Open an issue after three consecutive failures
+        if: failure() && steps.health.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing_issue="$(gh issue list --state open --search '"Uptime check failed" in:title' --json number --jq '.[0].number // empty')"
+          if [[ -z "$existing_issue" ]]; then
+            gh issue create \
+              --title "[Uptime] Health check failed three consecutive times" \
+              --body "The scheduled uptime workflow received no successful response from /health in three consecutive attempts. Check the latest Uptime check run and Render service logs. Close this issue after recovery; a later failure can then open a new incident."
+          else
+            echo "An uptime incident issue is already open: #$existing_issue"
+          fi

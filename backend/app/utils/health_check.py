@@ -35,12 +35,22 @@ async def check_redis_health() -> bool:
 
 async def check_ai_service_health() -> bool:
     try:
+        if settings.AI_PROVIDER.lower() == "openai":
+            if not settings.OPENAI_API_KEY:
+                return False
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                response = await client.get(
+                    "https://api.openai.com/v1/models",
+                    headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
+                )
+                return response.status_code == 200
+
         async with httpx.AsyncClient(timeout=3.0) as client:
-            response = await client.get(f"{settings.OLLAMA_BASE_URL}/api/version")
+            response = await client.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/version")
             return response.status_code == 200
     except Exception:
-        # If Ollama is offline but OpenAI key is set, report operational
-        return bool(settings.OPENAI_API_KEY)
+        logger.exception("AI service health check failed")
+        return False
 
 
 async def get_system_health(db: AsyncSession):
