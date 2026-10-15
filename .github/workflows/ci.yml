@@ -6,18 +6,6 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
       redis:
         image: redis:7
         ports: ['6379:6379']
@@ -28,7 +16,7 @@ jobs:
           --health-retries 5
     env:
       SECRET_KEY: ci-test-secret-key-naviora-32chars
-      DATABASE_URL: 'postgresql+asyncpg://postgres:test@localhost:5432/test'
+      DATABASE_URL: 'sqlite+aiosqlite:///:memory:'
       # CI-only generated keys; never use for production data.
       ENCRYPTION_KEY: 'JzzkGU_9lsgJzY5x_gsH7Gp_VA6WkPIkohf-ZS7LIEg='
       BACKUP_ENCRYPTION_KEY: 'XNnpxhb1KTnJBHs68rKezW7MZyJo-MwIdmaa7aIrlDk='
