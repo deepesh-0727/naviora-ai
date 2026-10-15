@@ -1,4 +1,4 @@
-import os
+import secrets
 from unittest.mock import AsyncMock
 
 import pytest
@@ -58,15 +58,12 @@ async def test_patient_register_login_book_check_queue_and_cancel(async_client, 
 
 
 @pytest.mark.asyncio
-async def test_patient_otp_round_trip_uses_configured_test_redis(async_client, monkeypatch, flush_test_redis_before_integration_test):
-    redis_url = os.getenv("NAVIORA_TEST_REDIS_URL")
-    if not redis_url:
-        pytest.skip("External blocker: configure NAVIORA_TEST_REDIS_URL to run the real-Redis OTP integration flow.")
-
+async def test_patient_otp_round_trip_uses_configured_test_redis(async_client, monkeypatch, configured_test_redis_url):
+    redis_url = configured_test_redis_url
     settings.REDIS_URL = redis_url
     sms = AsyncMock(return_value=True)
     monkeypatch.setattr(otp_module.sms_service, "send_otp", sms)
-    phone = "+919800009102"
+    phone = f"+9198{secrets.randbelow(100_000_000):08d}"
 
     generated = await async_client.post("/api/v1/auth/otp/generate", params={"phone": phone})
     assert generated.status_code == 200

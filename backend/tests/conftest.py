@@ -55,6 +55,7 @@ _engine = create_async_engine(
 def _register_sqlite_geometry_binding(dbapi_connection, connection_record):
     """Support NULL geometry values without requiring SpatiaLite in unit tests."""
     dbapi_connection.create_function("GeomFromEWKT", 1, lambda value: None)
+    dbapi_connection.create_function("AsEWKB", 1, lambda value: value)
     dbapi_connection.create_function("ST_AsEWKB", 1, lambda value: value)
 
 _TestingSessionLocal = async_sessionmaker(

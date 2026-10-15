@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 import pytest_asyncio
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from app.core.security import create_access_token
 from app.models.doctor import Department, Doctor
@@ -22,19 +23,27 @@ class FixedDateTime(datetime):
 
 
 @pytest_asyncio.fixture
-async def flush_test_redis_before_integration_test():
-    """Flush only the explicitly configured test Redis database."""
+async def configured_test_redis_url():
+    """Require a reachable test Redis without deleting data from its database."""
     redis_url = os.getenv("NAVIORA_TEST_REDIS_URL")
     if not redis_url:
-        yield
-        return
-    redis = Redis.from_url(redis_url, decode_responses=True)
+        pytest.fail("NAVIORA_TEST_REDIS_URL is required for Redis-backed integration tests.")
+    redis = Redis.from_url(
+        redis_url,
+        decode_responses=True,
+        socket_connect_timeout=5,
+        socket_timeout=5,
+    )
     try:
-        await redis.flushdb()
-        yield
+        await redis.ping()
+    except RedisError as exc:
+        pytest.fail(
+            f"NAVIORA_TEST_REDIS_URL is unreachable ({type(exc).__name__}).",
+            pytrace=False,
+        )
     finally:
-        await redis.flushdb()
         await redis.aclose()
+    return redis_url
 
 
 @pytest.fixture
@@ -47,11 +56,7 @@ def deterministic_appointment_time(monkeypatch):
 
 
 @pytest_asyncio.fixture
-async def hospital_actors(db_session, monkeypatch, flush_test_redis_before_integration_test):
-    if not os.getenv("NAVIORA_TEST_REDIS_URL"):
-        pytest.skip(
-            "External blocker: configure NAVIORA_TEST_REDIS_URL for real-Redis-backed API integration journeys."
-        )
+async def hospital_actors(db_session, monkeypatch, configured_test_redis_url):
     patient_user = User(
         phone="+919800001001", email="journey.patient@tests.example",
         password_hash="journey-password-hash", role="patient", is_active=True,

@@ -1,6 +1,4 @@
 import asyncio
-import os
-
 import pytest
 from redis.asyncio import Redis
 
@@ -23,11 +21,8 @@ class ConnectedSocket:
 
 
 @pytest.mark.asyncio
-async def test_realtime_fanout_reaches_second_manager_through_test_redis(flush_test_redis_before_integration_test):
-    redis_url = os.getenv("NAVIORA_TEST_REDIS_URL")
-    if not redis_url:
-        pytest.skip("External blocker: configure NAVIORA_TEST_REDIS_URL for real Redis WebSocket fan-out.")
-
+async def test_realtime_fanout_reaches_second_manager_through_test_redis(configured_test_redis_url):
+    redis_url = configured_test_redis_url
     first = WebSocketManager(redis=Redis.from_url(redis_url, decode_responses=True))
     second = WebSocketManager(redis=Redis.from_url(redis_url, decode_responses=True))
     first_socket = ConnectedSocket()

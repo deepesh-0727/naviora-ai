@@ -25,9 +25,9 @@ async def test_staff_journey_views_queue_marks_in_room_and_completes_consultatio
 
     queue = await async_client.get("/api/v1/staff/doctor/queue", headers=headers)
     assert queue.status_code == 200
-    assert len(queue.json()) == 1
-    assert queue.json()[0]["id"] == appointment.id
-    assert queue.json()[0]["status"] == "check_in"
+    assert len(queue.json()["items"]) == 1
+    assert queue.json()["items"][0]["id"] == appointment.id
+    assert queue.json()["items"][0]["status"] == "check_in"
 
     in_room = await async_client.put(
         f"/api/v1/staff/queue/{appointment.id}/status",

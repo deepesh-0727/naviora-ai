@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from typing import List, Optional
 from datetime import date, datetime, time, timezone
 from pydantic import BaseModel, Field
@@ -52,6 +52,7 @@ class AppointmentResponse(BaseModel):
 @limiter.limit("10/minute", key_func=user_or_ip_key)
 async def book_appointment(
     request: Request,
+    response: Response,
     appointment: AppointmentCreate,
     current_user = Depends(deps.check_role(["patient"])),
     db: AsyncSession = Depends(get_db)
