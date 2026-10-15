@@ -42,6 +42,20 @@ def test_liveness_does_not_probe_dependencies(client, monkeypatch):
     assert response.json() == {"status": "ok"}
 
 
+@pytest.mark.asyncio
+async def test_health_accepts_head_request(async_client):
+    """External monitors (UptimeRobot, Pingdom, Better Stack) send HEAD by default."""
+    response = await async_client.head("/health")
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_health_detailed_accepts_head_request(async_client):
+    """Same for the detailed health endpoint."""
+    response = await async_client.head("/health/detailed")
+    assert response.status_code == 200
+
+
 def test_readiness_reports_unreachable_redis(client, monkeypatch):
     monkeypatch.setattr(health.Redis, "from_url", lambda *_args, **_kwargs: UnhealthyRedis())
 

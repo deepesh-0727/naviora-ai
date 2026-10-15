@@ -92,12 +92,14 @@ def _package_version(name: str) -> str | None:
 
 
 @router.get("/health", tags=["system"])
+@router.head("/health", tags=["system"])
 async def liveness():
     """Confirm the process is running without probing external dependencies."""
     return {"status": "ok"}
 
 
 @router.get("/health/detailed", tags=["system"])
+@router.head("/health/detailed", tags=["system"])
 async def detailed_health(request: Request):
     """Return dependency reachability and uptime without exposing diagnostics."""
     if not _allow_detailed_health_request(request.client.host if request.client else None):
@@ -166,6 +168,7 @@ async def debug_sentry():
 
 
 @router.get("/ready", tags=["system"])
+@router.head("/ready", tags=["system"])
 async def readiness():
     """Report readiness only when both the configured database and Redis respond."""
     database_ok, _ = await _check_database()
