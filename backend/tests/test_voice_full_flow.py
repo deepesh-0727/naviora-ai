@@ -23,6 +23,12 @@ async def _turn(async_client, actors, text):
 
 
 def _use_deterministic_ollama(monkeypatch):
+    from app.services.voice.voice_orchestrator import voice_orchestrator
+
+    for agent in (voice_orchestrator.brain, voice_orchestrator.brain.appointment_agent):
+        monkeypatch.setattr(agent, "_circuit_open", False)
+        monkeypatch.setattr(agent, "last_ollama_error", None)
+
     async def ollama_response(self, prompt, system=None, model=None):
         if self.name == "HospitalBrain":
             return (
@@ -76,6 +82,11 @@ async def test_voice_full_happy_path_llm_unreachable_uses_fallback(
     monkeypatch.setattr(settings, "CACHE_ENABLED", False)
     monkeypatch.setattr(settings, "AI_MAX_RETRIES", 1)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "")
+    from app.services.voice.voice_orchestrator import voice_orchestrator
+
+    for agent in (voice_orchestrator.brain, voice_orchestrator.brain.appointment_agent):
+        monkeypatch.setattr(agent, "_circuit_open", False)
+        monkeypatch.setattr(agent, "last_ollama_error", None)
 
     async def ollama_unavailable(self, *_args, **_kwargs):
         raise httpx.ConnectError("test Ollama connection refused")
