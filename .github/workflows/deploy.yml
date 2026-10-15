@@ -1,21 +1,51 @@
-name: Production Deployment
+name: Deploy
 
 on:
-  push:
-    branches: [ main ]
+  workflow_run:
+    workflows: [Test]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  deploy:
+  deploy-backend:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Deploy to Render / Production Server
+      - name: Validate deployment secrets
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          RENDER_BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL }}
         run: |
-          echo "Triggering deployment pipeline for Naviora AI..."
-          # Deploy hook integration (e.g. Render deploy URL / SSH trigger)
-          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
-            curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-          else
-            echo "Render deploy hook not configured. Skipping remote trigger."
+          if [[ -z "$RENDER_DEPLOY_HOOK" ]]; then
+            echo "::error title=Missing secret::Add RENDER_DEPLOY_HOOK in repository Actions secrets."
+            exit 1
           fi
+          if [[ -z "$RENDER_BACKEND_URL" ]]; then
+            echo "::error title=Missing secret::Add RENDER_BACKEND_URL in repository Actions secrets."
+            exit 1
+          fi
+          if [[ ! "$RENDER_BACKEND_URL" =~ ^https:// ]]; then
+            echo "::error title=Invalid secret::RENDER_BACKEND_URL must be an https URL."
+            exit 1
+          fi
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK"
+      - name: Wait and health check
+        env:
+          RENDER_BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL }}
+        run: |
+          for i in {1..30}; do
+            sleep 10
+            if curl --fail --silent --show-error "$RENDER_BACKEND_URL/health" > /dev/null; then
+              echo "Deploy healthy"
+              exit 0
+            fi
+            echo "Attempt $i: not ready"
+          done
+          echo "::error title=Health check failed::Render did not become healthy within 5 minutes."
+          exit 1
