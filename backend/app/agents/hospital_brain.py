@@ -1,5 +1,7 @@
 import logging
 import json
+import httpx
+import re
 from typing import Dict, Any
 from .base_agent import BaseAgent
 from .specialized.appointment_agent import AppointmentAgent
@@ -38,7 +40,7 @@ class HospitalBrain(BaseAgent):
     async def execute(self, user_query: str, context: Dict[str, Any]) -> Dict[str, Any]:
         logger.info("HospitalBrain processing an authenticated voice request")
         cache_scope = str(context.get("user_id") or "anonymous")
-        
+
         # Step 0: Check Cache for cached intent classification
         from app.services.cache_service import cache_service
         cached_res = await cache_service.get_cached_intent(user_query, scope=cache_scope)
@@ -86,6 +88,16 @@ class HospitalBrain(BaseAgent):
             except Exception as e:
                 logger.warning("LLM classifier unavailable; using conservative rule classifier: %s", type(e).__name__)
                 base_analysis = self._rule_classify(user_query)
+                llm_error = self.last_ollama_error or e
+                if isinstance(llm_error, (httpx.ConnectError, httpx.TimeoutException, ConnectionError, TimeoutError, OSError)):
+                    fallback_reason = "llm_unreachable"
+                else:
+                    fallback_reason = "llm_response_unavailable"
+                base_analysis = {
+                    **base_analysis,
+                    "fallback_used": True,
+                    "fallback_reason": fallback_reason,
+                }
 
             # Store result in Redis cache
             await cache_service.set_cached_intent(user_query, base_analysis, ttl=3600, scope=cache_scope)
@@ -143,5 +155,33 @@ class HospitalBrain(BaseAgent):
         matches = [intent for intent, phrases in patterns.items() if any(phrase in normalized for phrase in phrases)]
         if len(matches) == 1:
             confidence = 0.9 if matches[0] == "emergency" else 0.72
-            return {"intent": matches[0], "confidence": confidence, "entities": {}}
+            entities: dict[str, Any] = {}
+            if matches[0] == "appointment":
+                from app.services.intent_executor import IntentExecutor
+
+                doctor_match = re.search(
+                    r"\b(?:dr\.?|doctor)\s+([a-z]+(?:\s+[a-z]+)?)",
+                    query,
+                    re.IGNORECASE,
+                )
+                if doctor_match is None:
+                    doctor_match = re.search(
+                        r"\bwith\s+([a-z]+(?:\s+[a-z]+)?)", query, re.IGNORECASE
+                    )
+                if doctor_match:
+                    name_tokens = []
+                    for token in doctor_match.group(1).split():
+                        if token.casefold() in {
+                            "today", "tomorrow", "monday", "tuesday", "wednesday",
+                            "thursday", "friday", "saturday", "sunday", "at", "on",
+                        }:
+                            break
+                        name_tokens.append(token)
+                    if name_tokens:
+                        entities["doctor"] = " ".join(name_tokens)
+                requested_slot = IntentExecutor._requested_slot({"preferred_time": query})
+                if requested_slot is not None:
+                    entities["date"] = requested_slot.date().isoformat()
+                    entities["time"] = requested_slot.time().isoformat()
+            return {"intent": matches[0], "confidence": confidence, "entities": entities}
         return {"intent": None, "confidence": 0.0, "entities": {}}

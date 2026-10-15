@@ -15,6 +15,7 @@ class BaseAgent(ABC):
         self.ollama_url = ollama_url
         self._circuit_open = False
         self._last_failure_time = 0
+        self.last_ollama_error: Exception | None = None
 
     @abstractmethod
     async def execute(self, user_query: str, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -38,7 +39,7 @@ class BaseAgent(ABC):
     async def _call_openai(self, prompt: str, system: Optional[str] = None) -> str:
         if not settings.OPENAI_API_KEY:
             raise AIInferenceError("OpenAI API key not configured")
-        
+
         headers = {
             "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
             "Content-Type": "application/json"
@@ -76,16 +77,19 @@ class BaseAgent(ABC):
 
         retries = 0
         backoff = 1.0
+        self.last_ollama_error = None
 
         # Try Primary Provider (Ollama) with retries
         while retries < settings.AI_MAX_RETRIES:
             try:
                 start_time = asyncio.get_event_loop().time()
                 result = await self._call_ollama(prompt, system, model)
+                self.last_ollama_error = None
                 latency = (asyncio.get_event_loop().time() - start_time) * 1000
                 logger.info(f"Agent {self.name} [Ollama] Success | Latency: {latency:.2f}ms | Retry: {retries}")
                 return result
             except Exception as e:
+                self.last_ollama_error = e
                 logger.warning(f"Agent {self.name} Ollama call failed: {e} | Retry: {retries}")
 
             retries += 1
@@ -109,5 +113,6 @@ class BaseAgent(ABC):
         self._circuit_open = True
         self._last_failure_time = time.time()
         logger.critical(f"Circuit breaker OPENED for agent: {self.name} after all retries and fallbacks failed.")
-        raise AIInferenceError(f"Agent {self.name} failed to process request after primary and fallback attempts.")
-
+        raise AIInferenceError(
+            f"Agent {self.name} failed to process request after primary and fallback attempts."
+        ) from self.last_ollama_error

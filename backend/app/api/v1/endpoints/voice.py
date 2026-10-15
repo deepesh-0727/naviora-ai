@@ -33,6 +33,8 @@ class VoiceProcessResponse(BaseModel):
     audio_response_b64: Optional[str] = None   # base64-encoded WAV bytes
     analysis: Optional[dict] = None
     session_id: Optional[str] = None
+    fallback_used: bool = False
+    fallback_reason: Optional[str] = None
 
 
 class TextQueryRequest(BaseModel):
@@ -149,6 +151,8 @@ async def process_voice_command(
         audio_response_b64=audio_b64,
         analysis=result.get("analysis"),
         session_id=session_id,
+        fallback_used=bool(result.get("fallback_used", False)),
+        fallback_reason=result.get("fallback_reason"),
     )
 
 
@@ -220,6 +224,8 @@ async def process_text_command(
         audio_response_b64=audio_b64,
         analysis=analysis,
         session_id=body.session_id,
+        fallback_used=bool(analysis.get("fallback_used", False)),
+        fallback_reason=analysis.get("fallback_reason"),
     )
 
 

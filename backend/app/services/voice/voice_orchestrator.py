@@ -310,6 +310,8 @@ class VoiceOrchestrator:
             "query": text_query,
             "intent": analysis.get("intent"),
             "response_text": response_text,
+            "fallback_used": bool(analysis.get("fallback_used", False)),
+            "fallback_reason": analysis.get("fallback_reason"),
             "audio_response": audio_response, # binary or None
             "analysis": analysis
         }
