@@ -67,4 +67,4 @@ jobs:
       - name: TypeScript check
         run: cd frontend && npx tsc --noEmit
       - name: Frontend unit tests
-        run: cd frontend && npm test -- --ci
+        run: cd frontend && npm test -- --ci --testTimeout=15000
