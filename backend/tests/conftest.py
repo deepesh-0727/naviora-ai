@@ -19,11 +19,13 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
+pytest_plugins = ("integration_fixtures",)
+
 # ── Force environment to test values BEFORE importing the app ──────────────
 os.environ["SECRET_KEY"] = "test-secret-key-naviora-ci-only-32"
 os.environ["ENCRYPTION_KEY"] = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
-os.environ["REDIS_URL"] = "redis://localhost:6379/0"
+os.environ["REDIS_URL"] = os.getenv("NAVIORA_TEST_REDIS_URL", "redis://localhost:6379/0")
 os.environ["TEXTLOCAL_API_KEY"] = ""
 os.environ["EMAIL_API_KEY"] = ""
 os.environ["FIREBASE_CREDENTIALS"] = ""
@@ -52,6 +54,7 @@ _engine = create_async_engine(
 def _register_sqlite_geometry_binding(dbapi_connection, connection_record):
     """Support NULL geometry values without requiring SpatiaLite in unit tests."""
     dbapi_connection.create_function("GeomFromEWKT", 1, lambda value: None)
+    dbapi_connection.create_function("ST_AsEWKB", 1, lambda value: value)
 
 _TestingSessionLocal = async_sessionmaker(
     bind=_engine,
@@ -79,8 +82,10 @@ async def create_tables():
     """Create service tables in the isolated SQLite database for each test."""
     from app.models.appointment import Appointment
     from app.models.doctor import Doctor
+    from app.models.emergency import EmergencyCase
     from app.models.user import User
     from app.models.hospital import AuditLog, StaffSchedule
+    from app.models.operations import EmergencyMessage
     from app.models.patient import Patient
     from app.models.queue import QueueEntry
     from app.models.security import RefreshToken
@@ -89,7 +94,7 @@ async def create_tables():
         test_tables = [
             User.__table__, AuditLog.__table__, Patient.__table__,
             Doctor.__table__, Appointment.__table__, QueueEntry.__table__,
-            StaffSchedule.__table__, RefreshToken.__table__,
+            StaffSchedule.__table__, RefreshToken.__table__, EmergencyMessage.__table__,
         ]
         # SQLite has no SpatiaLite extension in the test runtime. Keep the
         # ordinary department fields used by these tests, without a geometry
@@ -101,10 +106,20 @@ async def create_tables():
             "wing VARCHAR(50) NOT NULL, location BLOB, phone VARCHAR(20) NOT NULL, "
             "email VARCHAR(100) NOT NULL, created_at DATETIME)"
         )
+        await conn.exec_driver_sql(
+            "CREATE TABLE emergency_cases ("
+            "id INTEGER PRIMARY KEY, patient_id INTEGER, status VARCHAR(20) NOT NULL, "
+            "priority VARCHAR(20) NOT NULL, location_desc VARCHAR(255) NOT NULL, "
+            "location_coords BLOB, description TEXT, assigned_staff JSON, "
+            "ambulance_id VARCHAR(50), response_time INTEGER, acknowledged_at DATETIME, "
+            "en_route_at DATETIME, arrival_time DATETIME, treatment_notes TEXT, "
+            "created_at DATETIME, updated_at DATETIME)"
+        )
         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=test_tables))
     yield
     async with _engine.begin() as conn:
         await conn.run_sync(lambda sync_conn: Base.metadata.drop_all(sync_conn, tables=test_tables))
+        await conn.exec_driver_sql("DROP TABLE IF EXISTS emergency_cases")
         await conn.exec_driver_sql("DROP TABLE IF EXISTS departments")
 
 
