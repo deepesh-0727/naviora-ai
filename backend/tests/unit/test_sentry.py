@@ -3,6 +3,9 @@ import sys
 from types import ModuleType
 from unittest.mock import Mock
 
+import sentry_sdk
+from sentry_sdk.transport import Transport
+
 from app.core import sentry
 
 
@@ -35,3 +38,29 @@ def test_sentry_uses_configured_dsn_and_environment(monkeypatch):
         integrations=["sqlalchemy-integration"],
         environment="staging",
     )
+
+
+def test_sentry_initializes_and_captures_exception_with_test_transport(monkeypatch):
+    captured_envelopes = []
+
+    class RecordingTransport(Transport):
+        def capture_envelope(self, envelope):
+            captured_envelopes.append(envelope)
+
+    monkeypatch.setattr(sentry.settings, "SENTRY_DSN", "https://public@example.invalid/1")
+    monkeypatch.setattr(sentry.settings, "ENVIRONMENT", "test")
+
+    try:
+        assert sentry.init_sentry(transport=RecordingTransport)
+        sentry_sdk.capture_exception(ValueError("Sentry transport verification"))
+        sentry_sdk.flush(timeout=2)
+        assert captured_envelopes
+        assert any(
+            item.type == "event"
+            and "Sentry transport verification" in str(item.payload.json)
+            for envelope in captured_envelopes
+            for item in envelope
+        )
+    finally:
+        sentry_sdk.flush(timeout=2)
+        sentry_sdk.init(dsn=None)
