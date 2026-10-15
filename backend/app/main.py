@@ -89,7 +89,13 @@ PUBLIC_API_PATHS = {
     "/api/v1/auth/refresh",
     "/api/v1/auth/forgot-password",
     "/api/v1/auth/reset-password",
+    "/api/v1/departments",
+    "/api/v1/navigation/departments",
 }
+PUBLIC_API_PREFIXES = (
+    "/api/v1/departments/",
+    "/api/v1/navigation/departments/",
+)
 STAFF_ROLES = {"doctor", "nurse", "front_desk", "pharmacy", "facilities", "emergency", "staff"}
 ADMIN_ROLES = {"admin", "super_admin"}
 
@@ -101,6 +107,7 @@ async def enforce_api_identity_and_role_boundaries(request: Request, call_next):
     if (
         not path.startswith("/api/v1/")
         or path in PUBLIC_API_PATHS
+        or path.startswith(PUBLIC_API_PREFIXES)
         or path == "/api/v1/health"
         or request.method == "OPTIONS"
     ):

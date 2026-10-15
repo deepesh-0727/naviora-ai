@@ -103,6 +103,24 @@ async def test_top_level_department_routes_match_navigation_routes(
 
 
 @pytest.mark.asyncio
+async def test_departments_is_public_no_auth(async_client: AsyncClient, patient_api_context):
+    response = await async_client.get("/api/v1/departments")
+
+    assert response.status_code == 200, (
+        f"Expected 200, got {response.status_code}. "
+        "Public endpoints must not require auth."
+    )
+    assert response.json()[0]["name"] == "Patient API Tests"
+
+
+@pytest.mark.asyncio
+async def test_departments_still_rejects_unknown_paths(async_client: AsyncClient):
+    response = await async_client.get("/api/v1/departments/nonexistent")
+
+    assert response.status_code in (404, 422)
+
+
+@pytest.mark.asyncio
 async def test_profile_missing_and_permission_denied(async_client: AsyncClient, patient_api_context, db_session):
     missing_user = User(phone="+919800008805", email="no.profile@tests.example", password_hash="hash", role="patient")
     db_session.add(missing_user)
