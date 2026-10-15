@@ -76,6 +76,33 @@ async def test_profile_includes_patient_data_and_completed_visit(async_client: A
 
 
 @pytest.mark.asyncio
+async def test_top_level_department_routes_match_navigation_routes(
+    async_client: AsyncClient,
+    patient_api_context,
+):
+    headers = patient_api_context["headers"]
+    top_level_list = await async_client.get("/api/v1/departments", headers=headers)
+    navigation_list = await async_client.get(
+        "/api/v1/navigation/departments", headers=headers
+    )
+
+    assert top_level_list.status_code == 200
+    assert top_level_list.json() == navigation_list.json()
+    assert top_level_list.json()[0]["name"] == "Patient API Tests"
+
+    department_id = top_level_list.json()[0]["id"]
+    top_level_detail = await async_client.get(
+        f"/api/v1/departments/{department_id}", headers=headers
+    )
+    navigation_detail = await async_client.get(
+        f"/api/v1/navigation/departments/{department_id}", headers=headers
+    )
+
+    assert top_level_detail.status_code == 200
+    assert top_level_detail.json() == navigation_detail.json()
+
+
+@pytest.mark.asyncio
 async def test_profile_missing_and_permission_denied(async_client: AsyncClient, patient_api_context, db_session):
     missing_user = User(phone="+919800008805", email="no.profile@tests.example", password_hash="hash", role="patient")
     db_session.add(missing_user)
