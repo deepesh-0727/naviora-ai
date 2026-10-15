@@ -18,3 +18,5 @@ pre-commit run --all-files
 ```
 
 Backend and frontend test instructions are in [docs/testing.md](docs/testing.md). CI and deployment secret setup is in [docs/ci-secrets.md](docs/ci-secrets.md).
+
+<!-- First automated deploy -->
