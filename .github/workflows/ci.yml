@@ -9,6 +9,7 @@ jobs:
       postgres:
         image: postgres:15
         env:
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: test
           POSTGRES_DB: test
         ports: ['5432:5432']
@@ -27,7 +28,7 @@ jobs:
           --health-retries 5
     env:
       SECRET_KEY: ci-test-secret-key-naviora-32chars
-      DATABASE_URL: sqlite+aiosqlite:///:memory:
+      DATABASE_URL: 'postgresql+asyncpg://postgres:test@localhost:5432/test'
       REDIS_URL: redis://localhost:6379/0
       NAVIORA_TEST_REDIS_URL: redis://localhost:6379/0
       TEXTLOCAL_API_KEY: ''
