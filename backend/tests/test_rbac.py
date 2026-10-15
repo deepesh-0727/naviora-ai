@@ -3,7 +3,7 @@ from sqlalchemy import delete, select
 from fastapi import HTTPException
 
 from app.core.security import create_access_token
-from app.core.rbac import require_permission
+from app.core.rbac import ROLE_PERMISSIONS, require_permission
 from app.models.hospital import AuditLog
 from app.models.user import User
 
@@ -52,4 +52,30 @@ def test_permission_dependencies_apply_the_role_matrix():
     assert require_permission("view_patient")(nurse) is nurse
     with pytest.raises(HTTPException) as denied:
         require_permission("view_patient")(patient)
+    assert denied.value.status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("role", "allowed_permission", "denied_permission"),
+    [
+        ("patient", "manage_own_appointments", "manage_queue"),
+        ("doctor", "manage_queue", "manage_departments"),
+        ("nurse", "record_vitals", "manage_system"),
+        ("front_desk", "register_walk_in", "view_audit"),
+        ("pharmacy", "dispense_medications", "manage_maintenance"),
+        ("facilities", "manage_beds", "manage_staff"),
+        ("emergency", "manage_emergency", "manage_appointments"),
+        ("staff", "view_patient", "manage_system"),
+        ("admin", "view_audit", "manage_system"),
+        ("super_admin", "manage_system", "trigger_emergency"),
+    ],
+)
+def test_role_permission_matrix_allows_own_capabilities_and_denies_cross_role(role, allowed_permission, denied_permission):
+    user = User(role=role)
+
+    assert allowed_permission in ROLE_PERMISSIONS[role]
+    assert require_permission(allowed_permission)(user) is user
+    assert denied_permission not in ROLE_PERMISSIONS[role]
+    with pytest.raises(HTTPException) as denied:
+        require_permission(denied_permission)(user)
     assert denied.value.status_code == 403

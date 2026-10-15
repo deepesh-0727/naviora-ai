@@ -15,6 +15,7 @@ import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -46,6 +47,12 @@ _engine = create_async_engine(
     poolclass=StaticPool,
 )
 
+
+@event.listens_for(_engine.sync_engine, "connect")
+def _register_sqlite_geometry_binding(dbapi_connection, connection_record):
+    """Support NULL geometry values without requiring SpatiaLite in unit tests."""
+    dbapi_connection.create_function("GeomFromEWKT", 1, lambda value: None)
+
 _TestingSessionLocal = async_sessionmaker(
     bind=_engine,
     class_=AsyncSession,
@@ -69,16 +76,36 @@ def disable_global_websocket_lifecycle(monkeypatch):
 # ---------------------------------------------------------------------------
 @pytest_asyncio.fixture()
 async def create_tables():
-    """Create only tables needed by auth tests in the isolated SQLite database."""
+    """Create service tables in the isolated SQLite database for each test."""
+    from app.models.appointment import Appointment
+    from app.models.doctor import Doctor
     from app.models.user import User
-    from app.models.hospital import AuditLog
+    from app.models.hospital import AuditLog, StaffSchedule
+    from app.models.patient import Patient
+    from app.models.queue import QueueEntry
+    from app.models.security import RefreshToken
 
     async with _engine.begin() as conn:
-        test_tables = [User.__table__, AuditLog.__table__]
+        test_tables = [
+            User.__table__, AuditLog.__table__, Patient.__table__,
+            Doctor.__table__, Appointment.__table__, QueueEntry.__table__,
+            StaffSchedule.__table__, RefreshToken.__table__,
+        ]
+        # SQLite has no SpatiaLite extension in the test runtime. Keep the
+        # ordinary department fields used by these tests, without a geometry
+        # column that would require extension functions.
+        await conn.exec_driver_sql(
+            "CREATE TABLE departments ("
+            "id INTEGER PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, "
+            "description TEXT, floor INTEGER NOT NULL, building VARCHAR(50) NOT NULL, "
+            "wing VARCHAR(50) NOT NULL, location BLOB, phone VARCHAR(20) NOT NULL, "
+            "email VARCHAR(100) NOT NULL, created_at DATETIME)"
+        )
         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=test_tables))
     yield
     async with _engine.begin() as conn:
         await conn.run_sync(lambda sync_conn: Base.metadata.drop_all(sync_conn, tables=test_tables))
+        await conn.exec_driver_sql("DROP TABLE IF EXISTS departments")
 
 
 # ---------------------------------------------------------------------------
