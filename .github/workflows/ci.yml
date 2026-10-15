@@ -1,107 +1,75 @@
-name: Naviora AI CI
+name: CI
 
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
+on: [push, pull_request]
 
 jobs:
-  # ─────────────────────────────────────────────────────────────────
-  # Backend: lint → unit tests (SQLite in-memory, no real services)
-  # ─────────────────────────────────────────────────────────────────
-  backend-lint-and-test:
+  backend:
     runs-on: ubuntu-latest
-
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
-      # Override all external connections for CI.
-      # conftest.py also sets these before importing the app.
-      SECRET_KEY: "ci-test-secret-key-naviora-32chars"
-      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
-      REDIS_URL: "redis://localhost:6379/0"
-      TEXTLOCAL_API_KEY: ""
-      SMS_API_KEY: ""
-      EMAIL_API_KEY: ""
-      FIREBASE_CREDENTIALS: ""
-      RAZORPAY_KEY_ID: ""
-      RAZORPAY_KEY_SECRET: ""
-      SENTRY_DSN: ""
-      AI_PROVIDER: "ollama"
-      OPENAI_API_KEY: ""
-
+      SECRET_KEY: ci-test-secret-key-naviora-32chars
+      DATABASE_URL: sqlite+aiosqlite:///:memory:
+      REDIS_URL: redis://localhost:6379/0
+      NAVIORA_TEST_REDIS_URL: redis://localhost:6379/1
+      TEXTLOCAL_API_KEY: ''
+      SMS_API_KEY: ''
+      EMAIL_API_KEY: ''
+      FIREBASE_CREDENTIALS: ''
+      RAZORPAY_KEY_ID: ''
+      RAZORPAY_KEY_SECRET: ''
+      SENTRY_DSN: ''
+      AI_PROVIDER: ollama
+      OPENAI_API_KEY: ''
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: backend/requirements.txt
-
-      - name: Install dependencies
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -r backend/requirements-dev.txt
           pip install flake8
-          pip install -r backend/requirements.txt
+      - name: Lint fatal errors
+        run: flake8 backend/app --count --select=E9,F63,F7,F82 --show-source --statistics
+      - name: Test with coverage gate
+        run: PYTHONPATH=backend python -m pytest backend/tests -v --tb=short --asyncio-mode=auto --cov=app --cov-fail-under=70
 
-      - name: Lint — fatal errors only (syntax, undefined names)
-        run: |
-          flake8 backend/app \
-            --count \
-            --select=E9,F63,F7,F82 \
-            --show-source \
-            --statistics
-
-      - name: Lint — style warnings (non-blocking)
-        run: |
-          flake8 backend/app \
-            --count \
-            --exit-zero \
-            --max-complexity=12 \
-            --max-line-length=127 \
-            --statistics
-
-      - name: Run backend unit tests
-        run: |
-          PYTHONPATH=backend pytest backend/tests \
-            -v \
-            --tb=short \
-            --asyncio-mode=auto \
-            -p no:cacheprovider
-
-  # ─────────────────────────────────────────────────────────────────
-  # Frontend: install → TypeScript check → Expo web export
-  # ─────────────────────────────────────────────────────────────────
-  frontend-build-check:
+  frontend:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '18'
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
-
       - name: Install frontend dependencies
-        run: |
-          cd frontend
-          npm ci
-
-      - name: TypeScript type-check
-        run: |
-          cd frontend
-          npx tsc --noEmit || echo "Type-check complete (non-blocking in CI)."
-
-      - name: Expo web export (build check)
-        env:
-          EXPO_PUBLIC_API_URL: "https://naviora-backend-s6je.onrender.com"
-          EXPO_PUBLIC_ENV: "production"
-        run: |
-          cd frontend
-          npx expo export --platform web || \
-          npm run build || \
-          echo "Frontend build check complete."
+        run: cd frontend && npm ci --legacy-peer-deps
+      - name: TypeScript check
+        run: cd frontend && npx tsc --noEmit
+      - name: Frontend unit tests
+        run: cd frontend && npm test -- --ci
