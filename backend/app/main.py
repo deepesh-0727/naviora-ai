@@ -156,6 +156,11 @@ async def enforce_api_identity_and_role_boundaries(request: Request, call_next):
 # MIDDLEWARE STACK
 # (Order matters: outermost → innermost)
 # =========================================================
+def get_cors_allowed_origins() -> list[str]:
+    configured = settings.BACKEND_CORS_ORIGINS + settings.ALLOWED_ORIGINS
+    return list(dict.fromkeys(configured)) or ["*"]
+
+
 app.add_middleware(
     TrustedHostMiddleware,
     allowed_hosts=settings.ALLOWED_HOSTS or ["*"],
@@ -165,7 +170,7 @@ app.add_middleware(EnterpriseMiddleware)
 app.add_middleware(PrometheusMetricsMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=get_cors_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

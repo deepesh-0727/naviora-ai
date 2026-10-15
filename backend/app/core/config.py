@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: Annotated[
         List[str], BeforeValidator(any_http_url_list_validator)
     ] = []
+    ALLOWED_ORIGINS: Annotated[
+        List[str], BeforeValidator(any_http_url_list_validator)
+    ] = []
 
     # =========================================================
     # DATABASE — Supabase Session Pooler (IPv4 compatible)
@@ -81,6 +84,7 @@ class Settings(BaseSettings):
         "naviora-backend.onrender.com",
         "naviora-backend-s6je.onrender.com",
         "naviora-api.onrender.com",
+        "api.naviora.ai",
         "localhost",
         "127.0.0.1",
     ]

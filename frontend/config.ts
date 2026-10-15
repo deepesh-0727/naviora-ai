@@ -13,7 +13,7 @@ const getHostUrl = (): string => {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
-  
+
   if (ENV === 'production' || ENV === 'staging') {
     return ENV_URLS[ENV];
   }
@@ -23,20 +23,27 @@ const getHostUrl = (): string => {
     const ip = debuggerHost.split(':')[0];
     return `http://${ip}:8000`;
   }
-  
+
   if (Platform.OS === 'android') {
     return 'http://10.0.2.2:8000';
   }
-  
+
   return 'http://localhost:8000';
 };
 
 const rawHost = getHostUrl();
-const BASE = rawHost.endsWith('/api/v1') ? rawHost.slice(0, -7) : rawHost;
+export const buildServiceUrls = (host: string, websocketUrl?: string) => {
+  const base = host.endsWith('/api/v1') ? host.slice(0, -7) : host;
+  return {
+    API_BASE_URL: host.endsWith('/api/v1') ? host : `${base}/api/v1`,
+    WS_BASE_URL: websocketUrl || `${base.replace(/^http/, 'ws')}/api/v1/stream`,
+  };
+};
+
+const serviceUrls = buildServiceUrls(rawHost, process.env.EXPO_PUBLIC_WS_URL);
 
 export const CONFIG = {
-  API_BASE_URL: rawHost.endsWith('/api/v1') ? rawHost : `${BASE}/api/v1`,
-  WS_BASE_URL: process.env.EXPO_PUBLIC_WS_URL || `${BASE.replace(/^http/, 'ws')}/api/v1/stream`,
+  ...serviceUrls,
   ENVIRONMENT: ENV,
 };
 
