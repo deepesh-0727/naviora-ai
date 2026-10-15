@@ -12,6 +12,7 @@ from scripts.backup_restore import (
     postgres_connection,
     redis_connection,
 )
+from scripts import backup_restore
 
 
 def test_postgres_url_is_converted_without_exposing_password_in_arguments():
@@ -89,3 +90,18 @@ def test_archive_reader_validates_and_reads_expected_members(tmp_path):
     assert postgres_path.read_bytes() == files["postgres.sql"]
     assert redis_path.read_bytes() == files["redis.rdb"]
     assert manifest["database_row_count"]["count"] == 4
+
+
+def test_backup_cli_exits_nonzero_when_backup_operation_fails(monkeypatch, capsys):
+    monkeypatch.setattr(backup_restore, "load_dotenv", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("BACKUP_ENCRYPTION_KEY", Fernet.generate_key().decode())
+
+    def fail_utility(name):
+        raise BackupRestoreError(f"Required utility '{name}' is unavailable; install it and retry.")
+
+    monkeypatch.setattr(backup_restore, "_utility", fail_utility)
+
+    exit_code = backup_restore.main(["backup"])
+
+    assert exit_code == 1
+    assert "Backup/restore failed: Required utility 'pg_dump' is unavailable" in capsys.readouterr().err
