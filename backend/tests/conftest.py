@@ -90,12 +90,15 @@ async def create_tables():
     from app.models.patient import Patient
     from app.models.queue import QueueEntry
     from app.models.security import RefreshToken
+    from app.models.pharmacy import Prescription
+    from app.models.vitals import PatientVitals
 
     async with _engine.begin() as conn:
         test_tables = [
             User.__table__, AuditLog.__table__, Patient.__table__,
             Doctor.__table__, Appointment.__table__, QueueEntry.__table__,
             StaffSchedule.__table__, RefreshToken.__table__, EmergencyMessage.__table__,
+            Prescription.__table__, PatientVitals.__table__,
         ]
         # SQLite has no SpatiaLite extension in the test runtime. Keep the
         # ordinary department fields used by these tests, without a geometry
