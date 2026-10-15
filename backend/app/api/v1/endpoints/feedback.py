@@ -64,6 +64,7 @@ async def create_feedback(
         appointment_id=appointment.id,
         patient_id=patient.id,
         rating=feedback.rating,
+        nps_score=feedback.nps_score,
         comments=feedback.comments,
         categories=feedback.categories,
     )

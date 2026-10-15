@@ -16,6 +16,7 @@ from .pharmacy import Prescription, Inventory
 from .billing import Billing
 from .security import RefreshToken
 from .queue import QueueEntry
+from .voice_interaction import VoiceInteraction
 from .bed import Bed
 from .operations import (
     Admission,
@@ -57,6 +58,7 @@ __all__ = [
     "Inventory",
     "RefreshToken",
     "QueueEntry",
+    "VoiceInteraction",
     "Bed",
     "LabOrder",
     "MaintenanceRequest",

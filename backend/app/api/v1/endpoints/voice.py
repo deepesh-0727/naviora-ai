@@ -1,8 +1,7 @@
 import logging
 import base64
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from fastapi.responses import Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, Field
@@ -65,6 +64,7 @@ class SynthesizeResponse(BaseModel):
     ),
 )
 async def process_voice_command(
+    background_tasks: BackgroundTasks,
     audio: UploadFile = File(..., description="WAV or OGG audio file from the mobile app"),
     session_id: Optional[str] = Form(None, description="Ongoing session context ID"),
     return_audio: bool = Form(True, description="Set to false to skip TTS and save latency"),
@@ -104,6 +104,7 @@ async def process_voice_command(
             user=current_user,
             audio_data=audio_bytes,
             session_context=session_context,
+            background_tasks=background_tasks,
         )
     except HTTPException:
         raise

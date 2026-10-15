@@ -16,6 +16,7 @@ from app.models.billing import Billing  # noqa
 from app.models.vitals import PatientVitals  # noqa
 from app.models.security import RefreshToken  # noqa
 from app.models.queue import QueueEntry  # noqa
+from app.models.voice_interaction import VoiceInteraction  # noqa
 from app.models.bed import Bed  # noqa
 from app.models.operations import (  # noqa
     Admission,

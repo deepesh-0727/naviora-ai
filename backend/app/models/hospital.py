@@ -1,6 +1,6 @@
 import datetime
 from typing import Optional, List
-from sqlalchemy import String, Integer, ForeignKey, Text, DateTime, JSON, Boolean, Float
+from sqlalchemy import CheckConstraint, String, Integer, ForeignKey, Text, DateTime, JSON, Boolean, Float
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base_class import Base
@@ -22,10 +22,17 @@ class AuditLog(Base):
 
 class Feedback(Base):
     __tablename__ = "feedback"
+    __table_args__ = (
+        CheckConstraint(
+            "nps_score IS NULL OR (nps_score >= 0 AND nps_score <= 10)",
+            name="ck_feedback_nps_score_range",
+        ),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     appointment_id: Mapped[int] = mapped_column(Integer, ForeignKey("appointments.id"))
     patient_id: Mapped[int] = mapped_column(Integer, ForeignKey("patients.id"))
     rating: Mapped[int] = mapped_column(Integer)
+    nps_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     comments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     categories: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)

@@ -10,8 +10,8 @@ Targets are goals, not observed results. Report the sample size beside every rat
 | --- | --- | --- |
 | Average patient queue wait | < 15 minutes (baseline: 45 minutes) | Average of `queue_entries.served_at - queue_entries.entered_at` in minutes for queue entries served in the period. This measures time in the queue. `appointments.actual_time - scheduled_time` is not used: the application writes `actual_time` when a visit completes, so that difference includes appointment lateness and consultation time. |
 | Emergency response time | < 3 minutes | Average of `emergency_cases.arrival_time - emergency_cases.created_at` in seconds for cases that arrived in the period. Show the arrival sample size and the number of cases created in the period that remain unresolved separately. |
-| Voice intent accuracy | > 85% | Manually label a documented sample of voice interactions as correct/incorrect against the user's intended task; accuracy = correct / reviewed. `conversations` stores the predicted intent and confidence but no verified label, so SQL alone cannot calculate accuracy. The sample query below locates review candidates; record the labels in the pilot review worksheet until a reviewed-label table exists. |
-| Patient satisfaction | > 85% favorable ratings (requested “NPS” target) | Favorable share = feedback ratings of 4 or 5 divided by all submitted 1–5 ratings in the period. This is not NPS. The API restricts ratings to 1–5, while NPS requires a 0–10 recommendation question; report this as satisfaction until the survey and schema collect the NPS scale. |
+| Voice intent accuracy | > 85% | Manually review persisted `voice_interactions` and mark `reviewed_correct` against the user's intended task; accuracy = correct / reviewed. Report the reviewed sample size and average classifier confidence separately. |
+| Patient satisfaction / NPS | NPS > 85 | Collect a separate 0–10 recommendation score in `feedback.nps_score`. NPS = percentage of promoters (9–10) minus percentage of detractors (0–6); 7–8 are passives. Keep 1–5 satisfaction ratings separate. |
 | No-show rate | < 10% (baseline: 25%) | Appointments marked `no_show` divided by appointments scheduled in the period whose scheduled time has passed and were not cancelled. Include the numerator and denominator. |
 | Staff adoption | > 80% | Active staff accounts with `last_login` in the period divided by active staff accounts assigned to the pilot. Staff roles currently represented by `users.role` are `doctor` and `staff`; confirm the pilot roster before interpreting the denominator. |
 | Uptime | > 99.5% over the prior 30 days | Read the availability percentage and incident history from UptimeRobot for the production `/health` monitor. The application has no uptime-history SQL table; do not derive this from current health checks or service logs. Archive the monitor export with the monthly report. |
@@ -63,34 +63,38 @@ WHERE (arrival_time >= :start_utc AND arrival_time < :end_utc)
 
 The average covers responses completed during the period, including cases created before it. The unresolved count covers only cases created during the period. Those are separate cohorts and must not be combined into one denominator.
 
-### Voice interactions and manual review candidates
+### Voice intent accuracy and interactions
 
-Existing aggregate data (counts and confidence) can be queried, but confidence is not accuracy:
+Voice interactions are persisted in `voice_interactions`. Confidence is not accuracy; only manually reviewed records with `reviewed_correct` set contribute to accuracy:
 
 ```sql
 SELECT
-    COUNT(*) AS interaction_count,
+    COUNT(*) AS reviewed_sample_size,
+    COUNT(*) FILTER (WHERE reviewed_correct = TRUE) AS correct,
+    COUNT(*) FILTER (WHERE reviewed_correct = FALSE) AS incorrect,
+    COUNT(*) FILTER (WHERE reviewed_correct = TRUE)::decimal
+        / NULLIF(COUNT(*), 0) AS accuracy,
     AVG(confidence) AS avg_confidence
-FROM conversations
+FROM voice_interactions
 WHERE created_at >= :start_utc
   AND created_at < :end_utc
-  AND is_voice = TRUE;
+  AND reviewed_correct IS NOT NULL;
 ```
 
-For manual accuracy review, select a reproducible sample from the same period and have a reviewer compare each predicted `intent` with the intended task. Restrict access to transcript text and remove identifying details from the review copy.
+Select an unreviewed sample for labeling and have an authorized reviewer compare predicted `intent` with the intended task. Restrict transcript access and mark the review fields after evaluation.
 
 ```sql
-SELECT id, intent, confidence, query
-FROM conversations
+SELECT id, intent, confidence, transcript
+FROM voice_interactions
 WHERE created_at >= :start_utc
   AND created_at < :end_utc
-  AND is_voice = TRUE
+  AND reviewed_correct IS NULL
 ORDER BY id;
 ```
 
-The schema has no review-label column and the current voice orchestration path does not persist `ConversationHistory` rows. If this query returns no records, accuracy is not measurable from production data; do not report an accuracy percentage until voice interactions are persisted and reviewed labels are stored or documented.
+The persisted transcript column is encrypted at rest and decrypted by the ORM for authorized application use. No reviewed rows means accuracy is unavailable, not zero.
 
-### Patient satisfaction (favorable rating share)
+### Patient satisfaction and NPS
 
 ```sql
 SELECT
@@ -105,6 +109,24 @@ WHERE created_at >= :start_utc
 ```
 
 This reports the existing 1–5-star feedback measure, not NPS. Do not relabel it as NPS.
+
+Query the NPS measure separately:
+
+```sql
+SELECT
+    COUNT(*) AS responses,
+    COUNT(*) FILTER (WHERE nps_score >= 9) AS promoters,
+    COUNT(*) FILTER (WHERE nps_score BETWEEN 7 AND 8) AS passives,
+    COUNT(*) FILTER (WHERE nps_score <= 6) AS detractors,
+    100.0 * (
+        COUNT(*) FILTER (WHERE nps_score >= 9)
+        - COUNT(*) FILTER (WHERE nps_score <= 6)
+    ) / NULLIF(COUNT(*), 0) AS nps
+FROM feedback
+WHERE created_at >= :start_utc
+  AND created_at < :end_utc
+  AND nps_score IS NOT NULL;
+```
 
 ### No-show rate
 
@@ -163,4 +185,4 @@ This is a triage queue, not a confirmed-incident count. Review the associated au
 - Record period start/end, timezone, query run time, source system, sample size, exclusions, and reviewer for every reported value.
 - Keep department breakdowns alongside hospital-wide aggregates so a busy department cannot hide a failing one.
 - Do not publish patient-level rows in pilot reports. Aggregate results and keep any manual voice-review copy access-controlled and de-identified.
-- Mark voice accuracy, actual NPS, and database-backed uptime as unavailable until their missing data sources are implemented. No placeholder percentages should appear in dashboards or reports.
+- Mark voice accuracy unavailable when no interactions have been reviewed. Mark NPS unavailable when no 0–10 responses exist. Uptime remains an external UptimeRobot measure and has no application SQL query. No placeholder percentages should appear in dashboards or reports.

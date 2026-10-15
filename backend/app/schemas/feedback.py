@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class FeedbackCreate(BaseModel):
     appointment_id: int = Field(gt=0)
     rating: int = Field(ge=1, le=5)
+    nps_score: Optional[int] = Field(default=None, ge=0, le=10)
     comments: Optional[str] = None
     categories: Optional[list[str]] = None
 
@@ -16,6 +17,7 @@ class FeedbackResponse(BaseModel):
     appointment_id: int
     patient_id: int
     rating: int
+    nps_score: Optional[int] = None
     comments: Optional[str] = None
     categories: Optional[list[str]] = None
     created_at: datetime

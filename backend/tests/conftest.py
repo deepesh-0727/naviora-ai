@@ -69,6 +69,11 @@ app.state.rbac_session_factory = _TestingSessionLocal
 app.state.audit_session_factory = _TestingSessionLocal
 
 
+@pytest.fixture()
+def test_session_factory():
+    return _TestingSessionLocal
+
+
 @pytest.fixture(autouse=True)
 def disable_global_websocket_lifecycle(monkeypatch):
     """Avoid requiring an external Redis server in API tests; manager tests inject their own broker."""
@@ -84,12 +89,12 @@ async def create_tables():
     """Create service tables in the isolated SQLite database for each test."""
     from app.models.appointment import Appointment
     from app.models.doctor import Doctor
-    from app.models.emergency import EmergencyCase
     from app.models.user import User
-    from app.models.hospital import AuditLog, StaffSchedule
+    from app.models.hospital import AuditLog, Feedback, StaffSchedule
     from app.models.operations import EmergencyMessage
     from app.models.patient import Patient
     from app.models.queue import QueueEntry
+    from app.models.voice_interaction import VoiceInteraction
     from app.models.security import RefreshToken
     from app.models.pharmacy import Prescription
     from app.models.vitals import PatientVitals
@@ -97,8 +102,9 @@ async def create_tables():
 
     async with _engine.begin() as conn:
         test_tables = [
-            User.__table__, AuditLog.__table__, Patient.__table__,
+            User.__table__, AuditLog.__table__, Feedback.__table__, Patient.__table__,
             Doctor.__table__, Appointment.__table__, QueueEntry.__table__,
+            VoiceInteraction.__table__,
             StaffSchedule.__table__, RefreshToken.__table__, EmergencyMessage.__table__,
             Prescription.__table__, PatientVitals.__table__,
             Billing.__table__,
