@@ -172,22 +172,14 @@ async def process_text_command(
     Runs HospitalBrain intent classification + IntentExecutor on a pre-transcribed text query.
     Useful when the client handles STT locally (e.g., iOS SpeechRecognizer).
     """
-    from app.agents.hospital_brain import HospitalBrain
-    from app.services.intent_executor import intent_executor
-
-    brain = HospitalBrain()
     session_context = {"session_id": body.session_id or "default", "user_id": current_user.id}
 
     logger.info("[Voice/text] user=%s received a text command", current_user.id)
 
     try:
-        analysis = await brain.execute(body.text, session_context)
-        execution_result = await intent_executor.execute(db, current_user, analysis)
-        if isinstance(execution_result, dict):
-            response_text = str(execution_result.get("response_text") or "")
-            analysis = {**analysis, "appointment_result": execution_result}
-        else:
-            response_text = execution_result
+        analysis, response_text = await voice_orchestrator.process_text_turn(
+            db, current_user, body.text, session_context
+        )
     except HTTPException:
         raise
     except Exception as exc:

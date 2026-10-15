@@ -1,6 +1,9 @@
 import logging
+import re
+from datetime import datetime, timedelta
 from typing import Dict, Any
 from fastapi import BackgroundTasks
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.voice.stt_service import stt_service
@@ -8,8 +11,14 @@ from app.services.voice.tts_service import tts_service
 from app.agents.hospital_brain import HospitalBrain
 from app.services.intent_executor import intent_executor
 from app.models.user import User
+from app.models.appointment import Appointment
+from app.models.doctor import Department, Doctor
+from app.models.patient import Patient
 from app.models.voice_interaction import VoiceInteraction
 from app.db.session import SessionLocal
+from app.services.availability_service import database_datetime, get_available_slots
+from app.services.voice_pending_service import voice_pending_service
+from app.services.ws_manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +26,151 @@ class VoiceOrchestrator:
     def __init__(self):
         self.brain = HospitalBrain()
         self.session_factory = SessionLocal
+
+    @staticmethod
+    def _confirmation_decision(text: str) -> str | None:
+        normalized = re.sub(r"[^a-z\s']", " ", text.casefold())
+        normalized = " ".join(normalized.split()).replace("’", "'")
+        affirmative = {
+            "yes", "yeah", "yep", "sure", "confirm", "confirm booking",
+            "yes please", "yes confirm", "yes confirm booking", "yes book it",
+            "please confirm", "book it", "go ahead", "proceed",
+        }
+        negative = {
+            "no", "nope", "no cancel", "no cancel it", "cancel", "cancel it", "cancel booking", "stop",
+            "never mind", "nevermind", "no thank you", "no thanks", "don't book",
+        }
+        if normalized in affirmative:
+            return "confirm"
+        if normalized in negative:
+            return "cancel"
+        return None
+
+    async def process_text_turn(
+        self,
+        db: AsyncSession,
+        user: User,
+        text: str,
+        session_context: Dict[str, Any],
+    ) -> tuple[dict[str, Any], str]:
+        """Process a transcript, including a user-scoped pending confirmation."""
+        pending = await voice_pending_service.get_pending(user.id)
+        decision = self._confirmation_decision(text) if pending else None
+        if pending and decision == "confirm":
+            proposal = await voice_pending_service.pop_pending(user.id)
+            if proposal is None:
+                response = "That booking request expired. Please tell me the appointment details again."
+                return {"intent": "appointment", "confidence": 1.0, "entities": {}}, response
+            response = await self._confirm_appointment(db, user, proposal)
+            return {
+                "intent": "appointment",
+                "confidence": 1.0,
+                "entities": {},
+                "appointment_result": {"needs_confirmation": False, "confirmed": "Appointment " in response},
+            }, response
+        if pending and decision == "cancel":
+            await voice_pending_service.clear_pending(user.id)
+            response = "The appointment request is cancelled. Nothing was booked."
+            return {
+                "intent": "appointment",
+                "confidence": 1.0,
+                "entities": {},
+                "appointment_result": {"needs_confirmation": False, "cancelled": True},
+            }, response
+        if pending:
+            # A non-confirmation utterance is a new request; do not retain stale intent.
+            await voice_pending_service.clear_pending(user.id)
+
+        analysis = await self.brain.execute(text, session_context)
+        execution_result = await intent_executor.execute(db, user, analysis)
+        if isinstance(execution_result, dict):
+            if execution_result.get("needs_confirmation") and execution_result.get("booking_proposal"):
+                await voice_pending_service.set_pending(user.id, execution_result["booking_proposal"])
+                execution_result = {
+                    **execution_result,
+                    "response_text": (
+                        f"{execution_result.get('response_text', '').strip()} "
+                        "Confirm booking? Say yes to confirm or no to cancel."
+                    ).strip(),
+                }
+            response_text = str(execution_result.get("response_text") or "")
+            analysis = {**analysis, "appointment_result": execution_result}
+        else:
+            response_text = execution_result
+        return analysis, response_text
+
+    async def _confirm_appointment(
+        self,
+        db: AsyncSession,
+        user: User,
+        proposal: dict[str, Any],
+    ) -> str:
+        """Revalidate and create the appointment only after explicit confirmation."""
+        if user.role != "patient":
+            return "Only a patient account can confirm an appointment. Nothing was booked."
+        patient_id = await db.scalar(select(Patient.id).where(Patient.user_id == user.id))
+        try:
+            scheduled_time = database_datetime(datetime.fromisoformat(str(proposal.get("scheduled_time", ""))))
+        except ValueError:
+            return "That booking request is invalid. Please tell me the appointment details again."
+        if patient_id is None or patient_id != proposal.get("patient_id"):
+            return "I could not verify your patient profile. Nothing was booked."
+        doctor_result = await db.execute(
+            select(Doctor, Department)
+            .join(Department, Department.id == Doctor.department_id)
+            .join(User, User.id == Doctor.user_id)
+            .where(
+                Doctor.id == proposal.get("doctor_id"),
+                Department.id == proposal.get("department_id"),
+                Doctor.is_available.is_(True),
+                User.is_active.is_(True),
+            )
+        )
+        row = doctor_result.one_or_none()
+        if row is None:
+            return "That doctor is no longer available. Please request another appointment."
+        doctor, department = row
+        slots = [
+            database_datetime(datetime.fromisoformat(slot))
+            for slot in await get_available_slots(db, doctor, scheduled_time.date())
+        ]
+        if scheduled_time not in slots:
+            return "That slot is no longer available. Please request another time."
+
+        day_start = scheduled_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        count = await db.scalar(
+            select(func.count(Appointment.id)).where(
+                Appointment.doctor_id == doctor.id,
+                Appointment.scheduled_time >= day_start,
+                Appointment.scheduled_time < day_start + timedelta(days=1),
+                Appointment.status == "scheduled",
+            )
+        )
+        position = int(count or 0) + 1
+        appointment = Appointment(
+            patient_id=patient_id,
+            doctor_id=doctor.id,
+            department_id=department.id,
+            scheduled_time=scheduled_time,
+            status="scheduled",
+            queue_position=position,
+            wait_time_minutes=position * max(doctor.avg_consultation_time, 1),
+            symptoms=proposal.get("symptoms"),
+        )
+        db.add(appointment)
+        await db.commit()
+        await db.refresh(appointment)
+        event = {
+            "appointment_id": appointment.id,
+            "doctor_id": doctor.id,
+            "patient_id": patient_id,
+            "scheduled_time": scheduled_time.isoformat(),
+            "status": appointment.status,
+            "queue_position": position,
+        }
+        await ws_manager.broadcast_event(f"doctor:{doctor.id}", "queue_update", event)
+        await ws_manager.broadcast_event(f"patient:{patient_id}", "queue_update", event)
+        return f"Appointment confirmed with Dr. {doctor.first_name} {doctor.last_name}. Your queue position is {position}."
 
     async def process_audio_command(
         self,
@@ -39,15 +193,7 @@ class VoiceOrchestrator:
             return {"error": "Could not transcribe audio"}
 
         # 2. Intent Classification & Entity Extraction
-        analysis = await self.brain.execute(text_query, session_context)
-
-        # 3. Execute Action & Get Text Response
-        execution_result = await intent_executor.execute(db, user, analysis)
-        if isinstance(execution_result, dict):
-            response_text = str(execution_result.get("response_text") or "")
-            analysis = {**analysis, "appointment_result": execution_result}
-        else:
-            response_text = execution_result
+        analysis, response_text = await self.process_text_turn(db, user, text_query, session_context)
 
         # 4. Text to Speech
         audio_response = await tts_service.synthesize(response_text)
