@@ -32,14 +32,17 @@ class AuthService:
         db.add(db_user)
         await db.flush()
 
+        date_of_birth = user_in.date_of_birth or datetime.date.today()
+        if isinstance(date_of_birth, datetime.datetime):
+            date_of_birth = date_of_birth.date()
+        elif isinstance(date_of_birth, str):
+            date_of_birth = datetime.date.fromisoformat(date_of_birth)
+
         db_patient = Patient(
             user_id=db_user.id,
             first_name=user_in.first_name,
             last_name=user_in.last_name,
-            date_of_birth=datetime.datetime.combine(
-                user_in.date_of_birth or datetime.date.today(),
-                datetime.time.min,
-            ),
+            date_of_birth=date_of_birth,
             gender=user_in.gender,
             blood_group=user_in.blood_group,
             allergies=user_in.allergies,

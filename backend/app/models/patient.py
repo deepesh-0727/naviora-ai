@@ -1,6 +1,6 @@
 import datetime
 from typing import List, Optional, TYPE_CHECKING
-from sqlalchemy import String, Integer, ForeignKey, DateTime
+from sqlalchemy import String, Integer, ForeignKey, Date, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base
@@ -16,7 +16,7 @@ class Patient(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), unique=True)
     first_name: Mapped[str] = mapped_column(EncryptedText())
     last_name: Mapped[str] = mapped_column(EncryptedText())
-    date_of_birth: Mapped[datetime.date] = mapped_column(DateTime)
+    date_of_birth: Mapped[datetime.date] = mapped_column(Date)
     gender: Mapped[str] = mapped_column(String(10))
     blood_group: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
     allergies: Mapped[Optional[List[str]]] = mapped_column(EncryptedJSONList(), nullable=True)

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from datetime import date, datetime, time
+from datetime import date, datetime
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -176,6 +176,9 @@ async def get_profile(
     )
     visits = visits_result.scalars().all()
     last_visit = (visits[0].actual_time or visits[0].scheduled_time) if visits else None
+    date_of_birth = patient.date_of_birth
+    if isinstance(date_of_birth, datetime):
+        date_of_birth = date_of_birth.date()
     return {
         "id": patient.id,
         "first_name": patient.first_name,
@@ -189,7 +192,7 @@ async def get_profile(
         "medical_history": patient.medical_history,
         "insurance_provider": patient.insurance_provider,
         "insurance_number": patient.insurance_number,
-        "date_of_birth": patient.date_of_birth.date().isoformat() if patient.date_of_birth else None,
+        "date_of_birth": date_of_birth.isoformat() if date_of_birth else None,
         "gender": patient.gender,
         "total_visits": len(visits),
         "last_visit_date": last_visit.date() if last_visit else None,
@@ -212,7 +215,7 @@ async def update_profile(
             status_code=404,
             detail="Patient profile not found."
         )
-    
+
     changes = profile_update.model_dump(exclude_unset=True, exclude_none=True)
     if not changes:
         raise HTTPException(status_code=422, detail="At least one profile field is required.")
@@ -231,11 +234,9 @@ async def update_profile(
                 raise HTTPException(status_code=409, detail=f"{field.capitalize()} is already in use.")
             setattr(current_user, field, value)
 
-    if "date_of_birth" in changes:
-        changes["date_of_birth"] = datetime.combine(changes["date_of_birth"], time.min)
     for field, value in changes.items():
         setattr(patient, field, value)
-    
+
     await db.commit()
     return {"message": "Profile updated successfully", "data": profile_update}
 
@@ -248,7 +249,7 @@ async def get_history(
     Get patient medical records, visit history, and prescription history
     """
     from app.models.pharmacy import Prescription
-    
+
     user_id = current_user.id
     result = await db.execute(select(Patient).filter(Patient.user_id == user_id))
     patient = result.scalars().first()
@@ -262,7 +263,7 @@ async def get_history(
         .filter(Appointment.patient_id == patient.id)
         .order_by(Appointment.scheduled_time.desc())
     )
-    
+
     history = []
     for appointment, doctor in apt_res.all():
         history.append({

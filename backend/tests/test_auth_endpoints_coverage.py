@@ -56,6 +56,26 @@ async def test_register_creates_patient_with_hashed_password(async_client: Async
 
 
 @pytest.mark.asyncio
+async def test_register_persists_date_of_birth_as_date(async_client: AsyncClient, db_session):
+    from datetime import date
+
+    response = await async_client.post(
+        "/api/v1/auth/register",
+        json=registration_payload(
+            phone="+919800007798",
+            email="date.test2@naviora.ai",
+            date_of_birth="1990-05-15",
+        ),
+    )
+
+    user = (await db_session.execute(select(User).where(User.phone == "+919800007798"))).scalar_one()
+    patient = (await db_session.execute(select(Patient).where(Patient.user_id == user.id))).scalar_one()
+    assert response.status_code == 201
+    assert isinstance(patient.date_of_birth, date)
+    assert patient.date_of_birth == date(1990, 5, 15)
+
+
+@pytest.mark.asyncio
 async def test_register_rejects_duplicate_phone_and_email(async_client: AsyncClient, auth_api_context):
     ctx = auth_api_context
     duplicate_phone = await async_client.post("/api/v1/auth/register", json=registration_payload(phone=ctx["user"].phone))

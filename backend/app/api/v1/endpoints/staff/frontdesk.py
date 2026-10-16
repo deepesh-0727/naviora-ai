@@ -90,7 +90,7 @@ async def register_walk_in(
         user_id=user.id,
         first_name=split_name[0],
         last_name=split_name[1] if len(split_name) > 1 else "",
-        date_of_birth=datetime.combine(payload.date_of_birth, time.min),
+        date_of_birth=payload.date_of_birth,
         gender=payload.gender,
         emergency_contact=payload.emergency_contact,
         emergency_contact_name=payload.emergency_contact_name,
