@@ -1,9 +1,11 @@
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
 import logging
+import traceback
+import sentry_sdk
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +85,13 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     """Handler for Database errors (prevents leaking table details)."""
-    logger.error("Database request failed")
+    logger.error(
+        "Database request failed: %s: %s\n%s",
+        type(exc).__name__,
+        str(exc),
+        traceback.format_exc(),
+    )
+    sentry_sdk.capture_exception(exc)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
