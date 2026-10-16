@@ -183,6 +183,7 @@ class RegisteredDevice(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     platform: Mapped[str] = mapped_column(String(30), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     last_seen: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, server_default=func.now())
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, server_default=func.now())

@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
+import hashlib
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update, delete
-from typing import List
 
 from app.db.session import get_db
 from app.models.communication import Notification
@@ -31,7 +32,7 @@ async def get_unread_count(
     result = await db.execute(
         select(Notification).filter(
             Notification.user_id == current_user.id,
-            Notification.is_read == False
+            Notification.is_read.is_(False)
         )
     )
     return {"count": len(result.scalars().all())}
@@ -61,7 +62,7 @@ async def mark_all_as_read(
 ):
     await db.execute(
         update(Notification)
-        .where(Notification.user_id == current_user.id, Notification.is_read == False)
+        .where(Notification.user_id == current_user.id, Notification.is_read.is_(False))
         .values(is_read=True)
     )
     await db.commit()
@@ -82,7 +83,6 @@ async def delete_notification(
     await db.commit()
     return {"message": "Notification deleted"}
 
-from pydantic import BaseModel
 class TokenRegisterRequest(BaseModel):
     token: str
     platform: str = "android"
@@ -93,19 +93,30 @@ async def register_device_token(
     current_user = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    from app.models.communication import DeviceToken
+    from app.core.encryption import encrypt_text
+    from app.models.operations import RegisteredDevice
+    token_hash = hashlib.sha256(request.token.encode("utf-8")).hexdigest()
     result = await db.execute(
-        select(DeviceToken).filter(DeviceToken.token == request.token)
+        select(RegisteredDevice).filter(RegisteredDevice.token_hash == token_hash)
     )
     token_entry = result.scalars().first()
     if token_entry:
-        if token_entry.user_id != current_user.id:
-            token_entry.user_id = current_user.id
-            await db.commit()
+        token_entry.user_id = current_user.id
+        token_entry.platform = request.platform
+        token_entry.name = f"{request.platform} device"
+        token_entry.token_encrypted = encrypt_text(request.token)
+        token_entry.is_active = True
+        token_entry.last_seen = datetime.now(timezone.utc).replace(tzinfo=None)
     else:
-        new_token = DeviceToken(user_id=current_user.id, token=request.token, platform=request.platform)
+        new_token = RegisteredDevice(
+            user_id=current_user.id,
+            token_hash=token_hash,
+            token_encrypted=encrypt_text(request.token),
+            platform=request.platform,
+            name=f"{request.platform} device",
+        )
         db.add(new_token)
-        await db.commit()
+    await db.commit()
     return {"message": "Token registered"}
 
 @router.delete("/unregister-token/{token}")
@@ -114,10 +125,13 @@ async def unregister_device_token(
     current_user = Depends(deps.get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    from app.models.communication import DeviceToken
-    await db.execute(delete(DeviceToken).where(
-        DeviceToken.token == token,
-        DeviceToken.user_id == current_user.id
-    ))
+    import hashlib
+    from app.models.operations import RegisteredDevice
+    await db.execute(
+        delete(RegisteredDevice).where(
+            RegisteredDevice.token_hash == hashlib.sha256(token.encode("utf-8")).hexdigest(),
+            RegisteredDevice.user_id == current_user.id,
+        )
+    )
     await db.commit()
     return {"message": "Token unregistered"}

@@ -17,6 +17,7 @@ from .billing import Billing
 from .security import RefreshToken
 from .queue import QueueEntry
 from .voice_interaction import VoiceInteraction
+from .feedback_reminder import FeedbackReminder
 from .bed import Bed
 from .operations import (
     Admission,
@@ -59,6 +60,7 @@ __all__ = [
     "RefreshToken",
     "QueueEntry",
     "VoiceInteraction",
+    "FeedbackReminder",
     "Bed",
     "LabOrder",
     "MaintenanceRequest",

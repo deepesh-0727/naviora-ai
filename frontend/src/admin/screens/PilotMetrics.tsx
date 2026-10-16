@@ -19,6 +19,13 @@ interface PilotMetricsResponse {
   };
   active_staff: { daily: number; weekly: number };
   uptime: { last_30d: number | null; source: string };
+  patient_satisfaction: {
+    nps: number | null;
+    nps_responses: number;
+    promoters: number;
+    passives: number;
+    detractors: number;
+  };
 }
 
 interface MetricCardProps {
@@ -103,6 +110,7 @@ export default function PilotMetrics() {
   const emergencyHasSample = Boolean(metrics && metrics.emergency_response.sample_size > 0);
   const noShowHasSample = Boolean(metrics && metrics.no_show_rate.total > 0);
   const voiceHasReviewedSample = Boolean(metrics && metrics.voice_intents.reviewed_sample_size > 0);
+  const npsHasSample = Boolean(metrics && metrics.patient_satisfaction.nps_responses > 0);
 
   return (
     <ScreenContainer style={styles.screen}>
@@ -122,7 +130,7 @@ export default function PilotMetrics() {
         ) : null}
         {loading ? (
           <View style={styles.cards}>
-            {['Wait Time', 'Emergency Response', 'No-Show Rate', 'Voice Intent Accuracy', 'Active Staff', 'Uptime'].map((title) => (
+            {['Wait Time', 'Emergency Response', 'No-Show Rate', 'Voice Intent Accuracy', 'Active Staff', 'Uptime', 'Patient NPS'].map((title) => (
               <Card key={title} style={[styles.metricCard, { width: cardWidth }]}>
                 <Text style={styles.metricTitle}>{title}</Text>
                 <Loader message="Loading…" />
@@ -165,6 +173,14 @@ export default function PilotMetrics() {
               title="Uptime"
               value={metrics.uptime.last_30d === null ? 'External — see UptimeRobot' : formatPercent(metrics.uptime.last_30d)}
               detail={metrics.uptime.source === 'manual_uptimerobot_review' ? 'Review monitor history in UptimeRobot' : 'Last 30 days'}
+              width={cardWidth}
+            />
+            <MetricCard
+              title="Patient NPS"
+              value={npsHasSample && metrics.patient_satisfaction.nps !== null ? `${metrics.patient_satisfaction.nps}` : 'No data yet'}
+              detail={npsHasSample
+                ? `Promoters: ${metrics.patient_satisfaction.promoters} · Passives: ${metrics.patient_satisfaction.passives} · Detractors: ${metrics.patient_satisfaction.detractors}`
+                : 'No NPS responses yet'}
               width={cardWidth}
             />
           </View>

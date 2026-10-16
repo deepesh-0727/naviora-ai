@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
 import {
   Alert,
   RefreshControl,
@@ -12,6 +14,7 @@ import {
 
 import { api, type PatientNotification } from '../../shared/services/api';
 import { websocketClient } from '../../shared/services/websocket';
+import type { PatientRootParamList } from '../navigator/PatientNavigator';
 import {
   BackendNotAvailable,
   Card,
@@ -22,6 +25,7 @@ import {
 } from '../../shared/components';
 
 type FilterKey = 'all' | 'unread' | 'read';
+type PatientNavigation = StackNavigationProp<PatientRootParamList>;
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -48,6 +52,7 @@ function groupNotifs(notifs: PatientNotification[]): { today: PatientNotificatio
 }
 
 export default function NotificationsScreen() {
+  const navigation = useNavigation<PatientNavigation>();
   const [notifs, setNotifs] = useState<PatientNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -154,19 +159,19 @@ export default function NotificationsScreen() {
           {today.length > 0 && (
             <>
               <SectionHeader title="Today" />
-              {today.map((n) => <NotifCard key={n.id} item={n} onRead={markRead} onDelete={deleteNotif} />)}
+              {today.map((n) => <NotifCard key={n.id} item={n} onRead={markRead} onDelete={deleteNotif} onFeedback={(id) => navigation.navigate('Feedback', { appointmentId: id })} />)}
             </>
           )}
           {yesterday.length > 0 && (
             <>
               <SectionHeader title="Yesterday" />
-              {yesterday.map((n) => <NotifCard key={n.id} item={n} onRead={markRead} onDelete={deleteNotif} />)}
+              {yesterday.map((n) => <NotifCard key={n.id} item={n} onRead={markRead} onDelete={deleteNotif} onFeedback={(id) => navigation.navigate('Feedback', { appointmentId: id })} />)}
             </>
           )}
           {earlier.length > 0 && (
             <>
               <SectionHeader title="Earlier" />
-              {earlier.map((n) => <NotifCard key={n.id} item={n} onRead={markRead} onDelete={deleteNotif} />)}
+              {earlier.map((n) => <NotifCard key={n.id} item={n} onRead={markRead} onDelete={deleteNotif} onFeedback={(id) => navigation.navigate('Feedback', { appointmentId: id })} />)}
             </>
           )}
           {filtered.length === 0 && <EmptyState message="No notifications" />}
@@ -180,17 +185,25 @@ function NotifCard({
   item,
   onRead,
   onDelete,
+  onFeedback,
 }: {
   item: PatientNotification;
   onRead: (id: number) => void;
   onDelete: (id: number) => void;
+  onFeedback: (appointmentId: number) => void;
 }) {
+  const feedbackAppointmentId = item.data?.type === 'feedback_request' ? Number(item.data.appointment_id) : NaN;
   return (
     <Card style={[styles.notifCard, !item.is_read && styles.notifUnread]}>
       <View style={styles.notifRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.notifTitle}>{item.title ?? 'Notification'}</Text>
           <Text style={styles.notifBody}>{item.message ?? item.body ?? ''}</Text>
+          {Number.isInteger(feedbackAppointmentId) && feedbackAppointmentId > 0 ? (
+            <TouchableOpacity style={styles.feedbackButton} onPress={() => onFeedback(feedbackAppointmentId)}>
+              <Text style={styles.feedbackButtonText}>Share feedback</Text>
+            </TouchableOpacity>
+          ) : null}
           {item.created_at ? (
             <Text style={styles.notifTime}>{new Date(item.created_at).toLocaleString()}</Text>
           ) : null}
@@ -234,4 +247,6 @@ const styles = StyleSheet.create({
   notifTime: { fontSize: 11, color: '#8899AA', marginTop: 4 },
   notifActions: { gap: 6 },
   actionBtn: { padding: 4 },
+  feedbackButton: { alignSelf: 'flex-start', backgroundColor: '#1D8A6C', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8 },
+  feedbackButtonText: { color: '#fff', fontWeight: '700', fontSize: 12 },
 });

@@ -168,7 +168,7 @@ export default function DashboardScreen() {
               accessibilityLabel={action.label.replace('\n', ' ')}
               onPress={() => {
                 if ('screen' in action) {
-                  navigation.navigate(action.screen as keyof PatientRootParamList);
+                  (navigation.navigate as (screen: 'Navigation' | 'Emergency') => void)(action.screen);
                 } else {
                   (navigation as unknown as { navigate: (s: string) => void }).navigate(action.tab);
                 }

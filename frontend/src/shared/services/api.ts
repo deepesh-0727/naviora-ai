@@ -128,6 +128,7 @@ export interface PatientNotification {
   message?: string | null;
   body?: string | null;
   type?: string | null;
+  data?: Record<string, unknown> | null;
   is_read?: boolean;
   created_at?: string | null;
 }

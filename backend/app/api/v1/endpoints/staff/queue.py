@@ -56,6 +56,9 @@ async def update_queue_status(
         queue_entry.status = "served" if update.status == "completed" else update.status
         if update.status == "completed":
             queue_entry.served_at = datetime.utcnow()
+    if update.status == "completed":
+        from app.services.feedback_scheduler import schedule_feedback_reminder
+        await schedule_feedback_reminder(db, appointment)
     await db.commit()
     await db.refresh(appointment)
     payload = {"appointment_id": appointment.id, "doctor_id": appointment.doctor_id, "patient_id": appointment.patient_id, "status": appointment.status, "queue_position": appointment.queue_position}

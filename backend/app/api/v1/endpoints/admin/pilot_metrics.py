@@ -127,6 +127,7 @@ async def get_pilot_metrics(
         select(
             func.count(Feedback.id),
             func.count(Feedback.id).filter(Feedback.nps_score >= 9),
+            func.count(Feedback.id).filter(Feedback.nps_score.between(7, 8)),
             func.count(Feedback.id).filter(Feedback.nps_score <= 6),
         ).where(
             Feedback.created_at >= period_start,
@@ -134,7 +135,7 @@ async def get_pilot_metrics(
             Feedback.nps_score.is_not(None),
         )
     )
-    nps_total, promoters, detractors = (int(value or 0) for value in nps_counts.one())
+    nps_total, promoters, passives, detractors = (int(value or 0) for value in nps_counts.one())
 
     satisfaction_counts = await db.execute(
         select(
@@ -192,6 +193,9 @@ async def get_pilot_metrics(
         "patient_satisfaction": {
             "nps": round(100 * (promoters - detractors) / nps_total, 2) if nps_total else None,
             "nps_responses": nps_total,
+            "promoters": promoters,
+            "passives": passives,
+            "detractors": detractors,
             "favorable_rating_share": round(favorable_ratings / satisfaction_total, 4)
             if satisfaction_total else None,
             "rating_responses": satisfaction_total,

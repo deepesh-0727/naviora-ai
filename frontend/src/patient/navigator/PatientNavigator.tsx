@@ -21,6 +21,7 @@ import ProfileScreen from '../screens/Profile';
 import NavigationScreen from '../screens/Navigation';
 import EmergencyScreen from '../screens/Emergency';
 import SettingsScreen from '../screens/Settings';
+import FeedbackScreen from '../screens/Feedback';
 
 // ─── Route param lists ────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ export type PatientRootParamList = {
   Navigation: undefined;
   Emergency: undefined;
   Settings: undefined;
+  Feedback: { appointmentId: number };
 };
 
 export type PatientTabParamList = {
@@ -110,6 +112,7 @@ export default function PatientNavigator() {
       <Stack.Screen name="Navigation" component={NavigationScreen} />
       <Stack.Screen name="Emergency" component={EmergencyScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Feedback" component={FeedbackScreen} />
     </Stack.Navigator>
   );
 }

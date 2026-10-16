@@ -146,6 +146,9 @@ async def test_pilot_metrics_are_computed_from_persisted_rows(async_client, db_s
     assert metrics["patient_satisfaction"] == {
         "nps": 100.0,
         "nps_responses": 1,
+        "promoters": 1,
+        "passives": 0,
+        "detractors": 0,
         "favorable_rating_share": 1.0,
         "rating_responses": 1,
     }
@@ -189,4 +192,8 @@ async def test_pilot_metrics_returns_null_for_empty_samples(async_client, db_ses
     assert metrics["no_show_rate"] == {"rate": None, "total": 0, "no_shows": 0}
     assert metrics["voice_intents"]["reviewed_accuracy"] is None
     assert metrics["patient_satisfaction"]["nps"] is None
+    assert metrics["patient_satisfaction"]["nps_responses"] == 0
+    assert metrics["patient_satisfaction"]["promoters"] == 0
+    assert metrics["patient_satisfaction"]["passives"] == 0
+    assert metrics["patient_satisfaction"]["detractors"] == 0
     assert metrics["uptime"]["last_30d"] is None

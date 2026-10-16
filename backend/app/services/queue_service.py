@@ -191,6 +191,8 @@ class QueueService:
                 entry.status = "served"
                 entry.position = 0
                 entry.served_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            from app.services.feedback_scheduler import schedule_feedback_reminder
+            await schedule_feedback_reminder(db, appointment)
             await db.commit()
             await self.notify_queue_updates(db, doctor_id, redis_client=redis)
             return True

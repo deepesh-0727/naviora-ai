@@ -20,13 +20,25 @@ class PushNotificationService:
         body: str,
         data: Optional[Dict[str, Any]] = None
     ) -> bool:
-        from sqlalchemy.future import select
-        from app.models.communication import DeviceToken
-        result = await db.execute(select(DeviceToken).filter(DeviceToken.user_id == user_id))
+        from sqlalchemy import select
+        from app.core.encryption import decrypt_text
+        from app.models.operations import RegisteredDevice
+        result = await db.execute(
+            select(RegisteredDevice).where(
+                RegisteredDevice.user_id == user_id,
+                RegisteredDevice.is_active.is_(True),
+                RegisteredDevice.token_encrypted.is_not(None),
+            )
+        )
         tokens = result.scalars().all()
         success = False
-        for tk in tokens:
-            if await self.send_push_notification(tk.token, title, body, data):
+        for device in tokens:
+            try:
+                token = decrypt_text(device.token_encrypted)
+            except RuntimeError:
+                logger.exception("Could not decrypt registered push token for device %s", device.id)
+                continue
+            if await self.send_push_notification(token, title, body, data):
                 success = True
         return success
 

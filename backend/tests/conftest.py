@@ -91,6 +91,8 @@ async def create_tables():
     from app.models.doctor import Doctor
     from app.models.user import User
     from app.models.hospital import AuditLog, Feedback, StaffSchedule
+    from app.models.communication import Notification
+    from app.models.feedback_reminder import FeedbackReminder
     from app.models.operations import EmergencyMessage
     from app.models.patient import Patient
     from app.models.queue import QueueEntry
@@ -102,7 +104,8 @@ async def create_tables():
 
     async with _engine.begin() as conn:
         test_tables = [
-            User.__table__, AuditLog.__table__, Feedback.__table__, Patient.__table__,
+            User.__table__, AuditLog.__table__, Feedback.__table__, Notification.__table__,
+            FeedbackReminder.__table__, Patient.__table__,
             Doctor.__table__, Appointment.__table__, QueueEntry.__table__,
             VoiceInteraction.__table__,
             StaffSchedule.__table__, RefreshToken.__table__, EmergencyMessage.__table__,

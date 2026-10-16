@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +38,7 @@ from app.middleware.request_id import RequestIDMiddleware
 from app.core.logging import user_id_context
 from app.core.rate_limiter import limiter
 from app.services.ws_manager import ws_manager
+from app.services.feedback_scheduler import feedback_scheduler_loop
 
 # =========================================================
 # INIT: Logging, Error Tracking, App
@@ -56,6 +58,8 @@ app = FastAPI(
 app.state.rbac_session_factory = SessionLocal
 app.state.audit_session_factory = SessionLocal
 app.state.limiter = limiter
+app.state.feedback_scheduler_stop = asyncio.Event()
+app.state.feedback_scheduler_task = None
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
@@ -246,6 +250,11 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 async def on_startup():
     logger.info("Naviora AI | Initializing Clinical Environment")
     await ws_manager.start()
+    app.state.feedback_scheduler_stop.clear()
+    app.state.feedback_scheduler_task = asyncio.create_task(
+        feedback_scheduler_loop(SessionLocal, app.state.feedback_scheduler_stop),
+        name="feedback-reminder-scheduler",
+    )
     try:
         async with SessionLocal() as db:
             await init_db(db)
@@ -257,4 +266,7 @@ async def on_startup():
 @app.on_event("shutdown")
 async def on_shutdown():
     logger.info("Naviora AI | Safe Clinical Shutdown Initiated")
+    app.state.feedback_scheduler_stop.set()
+    if app.state.feedback_scheduler_task is not None:
+        await app.state.feedback_scheduler_task
     await ws_manager.shutdown()
