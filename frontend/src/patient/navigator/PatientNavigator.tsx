@@ -9,6 +9,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS } from '../../shared/theme';
 
 // Screens – resolved lazily after Batch 2 & 3 move/create them
 // For now we forward-reference them from ../../screens (old location)
@@ -57,36 +59,33 @@ function SOSButton() {
       style={styles.sos}
       onPress={() => navigation.navigate('Emergency')}
     >
-      <Text style={styles.sosText}>SOS</Text>
+      <Ionicons name="alert-circle" size={21} color={COLORS.white} />
+      <Text style={styles.sosText}>SOS Emergency</Text>
     </TouchableOpacity>
   );
 }
 
 // ─── Tab icon helper ──────────────────────────────────────────────────────────
 
-const TAB_ICONS: Record<string, string> = {
-  Home: '🏠',
-  Appointments: '📅',
-  Voice: '🎙',
-  Notifications: '🔔',
-  Profile: '👤',
+const TAB_ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
+  Home: { active: 'home', inactive: 'home-outline' },
+  Appointments: { active: 'calendar', inactive: 'calendar-outline' },
+  Voice: { active: 'mic', inactive: 'mic-outline' },
+  Notifications: { active: 'notifications', inactive: 'notifications-outline' },
+  Profile: { active: 'person', inactive: 'person-outline' },
 };
 
 // ─── Bottom Tabs ──────────────────────────────────────────────────────────────
 
 function PatientTabs() {
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.background }}>
       <Tab.Navigator
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 18, opacity: focused ? 1 : 0.5 }}>
-              {TAB_ICONS[route.name] ?? '•'}
-            </Text>
-          ),
-          tabBarActiveTintColor: '#1D8A6C',
-          tabBarInactiveTintColor: '#8899AA',
+          tabBarIcon: ({ focused, color }) => <Ionicons name={focused ? TAB_ICONS[route.name].active : TAB_ICONS[route.name].inactive} size={22} color={color} />,
+          tabBarActiveTintColor: COLORS.primary,
+          tabBarInactiveTintColor: COLORS.textMuted,
           tabBarStyle: styles.tabBar,
           tabBarLabelStyle: styles.tabLabel,
         })}
@@ -122,33 +121,36 @@ export default function PatientNavigator() {
 const styles = StyleSheet.create({
   sos: {
     position: 'absolute',
-    bottom: 72,
+    bottom: 82,
     right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#D94A4A',
+    minWidth: 176,
+    height: 58,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    backgroundColor: COLORS.danger,
+    flexDirection: 'row',
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#D94A4A',
+    shadowColor: COLORS.danger,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
+    shadowOpacity: 0.24,
     shadowRadius: 8,
     elevation: 8,
     zIndex: 999,
   },
   sosText: {
-    color: '#fff',
+    color: COLORS.white,
     fontWeight: '800',
     fontSize: 13,
     letterSpacing: 0.5,
   },
   tabBar: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
     borderTopWidth: 1,
-    borderTopColor: '#E5EAF0',
-    paddingTop: 4,
-    height: 64,
+    borderTopColor: COLORS.border,
+    paddingTop: 7,
+    height: 68,
   },
   tabLabel: {
     fontSize: 11,

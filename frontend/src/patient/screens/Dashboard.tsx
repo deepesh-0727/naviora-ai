@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { PatientRootParamList } from '../navigator/PatientNavigator';
 import { useNavigation } from '@react-navigation/native';
@@ -23,22 +25,23 @@ import {
   Loader,
   SectionHeader,
   Badge,
+  Avatar,
 } from '../../shared/components';
+import { colors } from '../../shared/theme/colors';
 
 type Nav = StackNavigationProp<PatientRootParamList>;
 
 const QUICK_ACTIONS = [
-  { label: 'Book\nAppointment', icon: '📅', tab: 'Appointments' },
-  { label: 'Navigation', icon: '🗺️', screen: 'Navigation' },
-  { label: 'Emergency', icon: '🚨', screen: 'Emergency' },
-  { label: 'Voice\nAssistant', icon: '🎙️', tab: 'Voice' },
+  { label: 'Voice AI Assistant', description: 'Speak to book, triage symptoms and navigate', icon: 'mic-outline' as const, tab: 'Voice' as const },
+  { label: 'Indoor Hospital Map', description: 'Find departments and get directions', icon: 'navigate-outline' as const, screen: 'Navigation' as const },
+  { label: 'Book an Appointment', description: 'Browse specialists and available times', icon: 'calendar-outline' as const, tab: 'Appointments' as const },
 ] as const;
 
 function statusColor(status: string): string {
-  if (status === 'confirmed') return '#1D8A6C';
-  if (status === 'pending') return '#E8A838';
-  if (status === 'cancelled') return '#D94A4A';
-  return '#8899AA';
+  if (status === 'confirmed') return colors.primary;
+  if (status === 'pending') return colors.accent;
+  if (status === 'cancelled') return colors.danger;
+  return colors.textMuted;
 }
 
 export default function DashboardScreen() {
@@ -103,30 +106,44 @@ export default function DashboardScreen() {
     ? '…'
     : 'Patient';
 
+  const greeting = new Date().getHours() < 12 ? 'Good morning,' : new Date().getHours() < 17 ? 'Good afternoon,' : 'Good evening,';
+  const queuePosition = nextAppt?.queue_position;
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={queueLoading || profileLoading} onRefresh={refreshAll} />}
       >
-        {/* Header */}
+        {/* Patient identity and alerts */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Good day 👋</Text>
-            <Text style={styles.name}>{displayName}</Text>
+          <View style={styles.identity}>
+            <Avatar label={displayName} size={48} />
+            <View>
+              <Text style={styles.greeting}>{greeting}</Text>
+              <Text style={styles.name}>{displayName}</Text>
+            </View>
           </View>
           <TouchableOpacity
-            style={styles.notifBell}
+            style={styles.iconButton}
             onPress={() => (navigation as unknown as { navigate: (s: string) => void }).navigate('Notifications')}
             accessibilityLabel="Notifications"
           >
-            <Text style={{ fontSize: 22 }}>🔔</Text>
+            <Ionicons name="notifications-outline" size={21} color={colors.text} />
             {recentNotifs.some((n) => !n.is_read) && <View style={styles.notifDot} />}
           </TouchableOpacity>
         </View>
 
+        <View style={styles.patientId}><Ionicons name="finger-print-outline" size={18} color={colors.primary} /><Text style={styles.patientIdText}>Patient ID: NAV-{profile?.id ?? '—'}</Text><Text style={styles.secureLabel}>SECURE</Text></View>
+
+        <View style={styles.metricsRow}>
+          <Card style={styles.metricCard}><View style={[styles.metricIcon, styles.greenIcon]}><Ionicons name="time-outline" size={20} color={colors.primary} /></View><Text style={styles.metricValue}>{queuePosition ? `#${queuePosition}` : '—'}</Text><Text style={styles.metricLabel}>Queue in line</Text><Text style={styles.metricHint}>{queuePosition ? `~${nextAppt?.estimated_wait_minutes ?? '—'} min wait` : 'No active queue'}</Text></Card>
+          <Card style={styles.metricCard}><View style={[styles.metricIcon, styles.amberIcon]}><Ionicons name="calendar-outline" size={20} color={colors.accent} /></View><Text style={[styles.metricValue, { color: colors.accent }]}>{appointments.length}</Text><Text style={styles.metricLabel}>Bookings</Text><Text style={styles.metricHint}>{nextAppt ? new Date(nextAppt.scheduled_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No upcoming visit'}</Text></Card>
+          <Card style={styles.metricCard}><View style={[styles.metricIcon, styles.redIcon]}><Ionicons name="pulse-outline" size={20} color={colors.danger} /></View><Text style={[styles.metricValue, { color: colors.danger, fontSize: 17 }]}>SOS</Text><Text style={styles.metricLabel}>Response</Text><Text style={[styles.metricHint, styles.ready]}>Ready 24/7</Text></Card>
+        </View>
+
         {/* Next appointment card */}
-        <SectionHeader title="Next Appointment" />
+        <SectionHeader title="Today's Appointment Schedule" />
         {queueUnavailable ? (
           <BackendNotAvailable endpoint="GET /appointments?upcoming=true" />
         ) : queueLoading ? (
@@ -159,7 +176,7 @@ export default function DashboardScreen() {
         )}
 
         {/* Quick actions */}
-        <SectionHeader title="Quick Actions" />
+        <SectionHeader title="Hospital Quick Actions" />
         <View style={styles.quickGrid}>
           {QUICK_ACTIONS.map((action) => (
             <TouchableOpacity
@@ -168,14 +185,16 @@ export default function DashboardScreen() {
               accessibilityLabel={action.label.replace('\n', ' ')}
               onPress={() => {
                 if ('screen' in action) {
-                  (navigation.navigate as (screen: 'Navigation' | 'Emergency') => void)(action.screen);
+                  navigation.navigate(action.screen);
                 } else {
                   (navigation as unknown as { navigate: (s: string) => void }).navigate(action.tab);
                 }
               }}
             >
-              <Text style={styles.quickIcon}>{action.icon}</Text>
+              <View style={styles.quickIconBox}><Ionicons name={action.icon} size={24} color={colors.primary} /></View>
+              <Ionicons name="arrow-forward-outline" size={18} color={colors.primary} style={styles.quickArrow} />
               <Text style={styles.quickLabel}>{action.label}</Text>
+              <Text style={styles.quickDescription}>{action.description}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -225,34 +244,50 @@ function HealthChip({ icon, label, title }: { icon: string; label: string; title
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F7F9FC' },
-  scroll: { padding: 16, paddingBottom: 100 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  greeting: { fontSize: 14, color: '#5F6975' },
-  name: { fontSize: 22, fontWeight: '800', color: '#1C1F24' },
-  notifBell: { position: 'relative', padding: 4 },
-  notifDot: { position: 'absolute', top: 2, right: 2, width: 8, height: 8, borderRadius: 4, backgroundColor: '#D94A4A' },
+  safe: { flex: 1, backgroundColor: colors.background },
+  scroll: { padding: 16, paddingBottom: 112 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  greeting: { fontSize: 14, color: colors.textMuted },
+  name: { fontSize: 20, fontWeight: '800', color: colors.text },
+  iconButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  notifDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger },
+  patientId: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primaryLight, borderWidth: 1, borderColor: colors.primary, borderRadius: 14, padding: 12, marginBottom: 16 },
+  patientIdText: { color: colors.primary, fontWeight: '800', flex: 1 },
+  secureLabel: { color: colors.primary, fontSize: 10, fontWeight: '800' },
+  metricsRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
+  metricCard: { flex: 1, paddingHorizontal: 8, paddingVertical: 12, alignItems: 'center', minHeight: 150 },
+  metricIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  greenIcon: { backgroundColor: colors.primaryLight },
+  amberIcon: { backgroundColor: colors.amberSoft },
+  redIcon: { backgroundColor: colors.dangerLight },
+  metricValue: { fontSize: 22, fontWeight: '800', color: colors.primary },
+  metricLabel: { color: colors.textMuted, fontSize: 12, textAlign: 'center', marginTop: 2 },
+  metricHint: { color: colors.text, fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: 4 },
+  ready: { color: colors.danger },
   apptCard: { marginBottom: 4 },
   apptRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   apptIcon: { fontSize: 28 },
-  apptDoctor: { fontSize: 16, fontWeight: '700', color: '#1C1F24' },
-  apptDept: { fontSize: 13, color: '#5F6975' },
-  apptTime: { fontSize: 12, color: '#8899AA', marginTop: 2 },
-  queueRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderColor: '#E5EAF0' },
-  queueLabel: { fontSize: 12, color: '#5F6975', flex: 1 },
-  queueValue: { fontSize: 18, fontWeight: '800', color: '#1D8A6C' },
-  queueWait: { fontSize: 12, color: '#8899AA' },
+  apptDoctor: { fontSize: 16, fontWeight: '700', color: colors.text },
+  apptDept: { fontSize: 13, color: colors.textMuted },
+  apptTime: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  queueRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderColor: colors.border },
+  queueLabel: { fontSize: 12, color: colors.textMuted, flex: 1 },
+  queueValue: { fontSize: 18, fontWeight: '800', color: colors.primary },
+  queueWait: { fontSize: 12, color: colors.textMuted },
   quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 },
-  quickItem: { width: '46%', backgroundColor: '#fff', borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#E5EAF0' },
-  quickIcon: { fontSize: 28, marginBottom: 8 },
-  quickLabel: { fontSize: 12, color: '#1C1F24', fontWeight: '600', textAlign: 'center' },
+  quickItem: { width: '100%', backgroundColor: colors.white, borderRadius: 18, padding: 16, alignItems: 'flex-start', borderWidth: 1, borderColor: colors.border, marginBottom: 10, minHeight: 150, ...Platform.select({ android: { elevation: 2 }, default: { shadowColor: colors.shadow, shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } } }) },
+  quickIconBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  quickArrow: { position: 'absolute', top: 18, right: 18 },
+  quickLabel: { fontSize: 16, color: colors.text, fontWeight: '700' },
+  quickDescription: { fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 19, maxWidth: 250 },
   healthRow: { flexDirection: 'row', gap: 16 },
   healthChip: { flex: 1, alignItems: 'center' },
   healthIcon: { fontSize: 24, marginBottom: 4 },
-  healthTitle: { fontSize: 11, color: '#8899AA', marginBottom: 2 },
-  healthValue: { fontSize: 13, fontWeight: '700', color: '#1C1F24', textAlign: 'center' },
+  healthTitle: { fontSize: 11, color: colors.textMuted, marginBottom: 2 },
+  healthValue: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'center' },
   notifCard: { marginBottom: 8 },
-  notifUnread: { borderLeftWidth: 3, borderLeftColor: '#1D8A6C' },
-  notifTitle: { fontSize: 14, fontWeight: '700', color: '#1C1F24' },
-  notifBody: { fontSize: 13, color: '#5F6975', marginTop: 2 },
+  notifUnread: { borderLeftWidth: 3, borderLeftColor: colors.primary },
+  notifTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+  notifBody: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
 });

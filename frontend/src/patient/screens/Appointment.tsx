@@ -3,15 +3,16 @@ import {
   Alert,
   Modal,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppointments } from '../hooks/useAppointments';
+import { colors } from '../../shared/theme/colors';
 import { websocketClient } from '../../shared/services/websocket';
 import type { Appointment, Department, Doctor } from '../../shared/services/api';
 import {
@@ -29,10 +30,10 @@ import {
 type TabKey = 'upcoming' | 'past';
 
 function statusColor(status: string): string {
-  if (status === 'confirmed') return '#1D8A6C';
-  if (status === 'pending') return '#E8A838';
-  if (status === 'cancelled') return '#D94A4A';
-  return '#8899AA';
+  if (status === 'confirmed') return colors.primary;
+  if (status === 'pending') return colors.accent;
+  if (status === 'cancelled') return colors.danger;
+  return colors.textMuted;
 }
 
 // ─── Book Wizard ─────────────────────────────────────────────────────────────
@@ -269,6 +270,7 @@ export default function AppointmentScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.screenHeading}><SectionHeader title="Appointments" /><Text style={styles.screenSubtitle}>Your visits, schedule and booking options</Text></View>
       {/* Tab bar */}
       <View style={styles.tabRow}>
         {(['upcoming', 'past'] as TabKey[]).map((t) => (
@@ -313,8 +315,6 @@ export default function AppointmentScreen() {
         </ScrollView>
       )}
 
-      <SectionHeader title="" />
-
       <BookWizard
         visible={showWizard}
         onClose={() => setShowWizard(false)}
@@ -333,35 +333,37 @@ export default function AppointmentScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F7F9FC' },
+  safe: { flex: 1, backgroundColor: colors.background },
+  screenHeading: { paddingHorizontal: 16, paddingTop: 8 },
+  screenSubtitle: { color: colors.textMuted, marginBottom: 8, marginTop: -8 },
   tabRow: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 8 },
-  tabBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, backgroundColor: '#EEF2F7', borderWidth: 1, borderColor: '#DDE5EE' },
-  tabBtnActive: { backgroundColor: '#1D8A6C', borderColor: '#1D8A6C' },
-  tabBtnText: { fontSize: 13, color: '#5F6975', fontWeight: '600' },
-  tabBtnTextActive: { color: '#fff' },
-  bookBtn: { marginLeft: 'auto', backgroundColor: '#1D8A6C', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
-  bookBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  tabBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border },
+  tabBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tabBtnText: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
+  tabBtnTextActive: { color: colors.white },
+  bookBtn: { marginLeft: 'auto', backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999 },
+  bookBtnText: { color: colors.white, fontWeight: '700', fontSize: 13 },
   scroll: { paddingHorizontal: 16, paddingBottom: 100 },
   apptCard: { marginBottom: 10 },
   apptRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  apptDoctor: { fontSize: 15, fontWeight: '700', color: '#1C1F24' },
-  apptDept: { fontSize: 13, color: '#5F6975' },
-  apptTime: { fontSize: 12, color: '#8899AA', marginTop: 2 },
+  apptDoctor: { fontSize: 15, fontWeight: '700', color: colors.text },
+  apptDept: { fontSize: 13, color: colors.textMuted },
+  apptTime: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   apptActions: { flexDirection: 'row', gap: 8, marginTop: 10, justifyContent: 'flex-end' },
   actionBtn: { flex: 1 },
   // Wizard
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  wizardSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' },
+  wizardSheet: { backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' },
   wizardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  wizardTitle: { fontSize: 18, fontWeight: '700', color: '#1C1F24' },
-  listItem: { padding: 14, borderRadius: 12, marginBottom: 8, backgroundColor: '#F7F9FC', borderWidth: 1, borderColor: '#E5EAF0' },
-  listItemActive: { backgroundColor: '#EAF9F3', borderColor: '#1D8A6C' },
-  listItemText: { fontSize: 15, color: '#1C1F24', fontWeight: '600' },
-  listItemSub: { fontSize: 12, color: '#5F6975', marginTop: 2 },
-  slotLabel: { fontSize: 14, fontWeight: '700', color: '#1C1F24', marginBottom: 10, marginTop: 8 },
+  wizardTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
+  listItem: { padding: 14, borderRadius: 12, marginBottom: 8, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  listItemActive: { backgroundColor: colors.primaryLight, borderColor: colors.primary },
+  listItemText: { fontSize: 15, color: colors.text, fontWeight: '600' },
+  listItemSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  slotLabel: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 10, marginTop: 8 },
   slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  slot: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: '#F7F9FC', borderWidth: 1, borderColor: '#DDE5EE' },
-  slotActive: { backgroundColor: '#1D8A6C', borderColor: '#1D8A6C' },
-  slotText: { fontSize: 13, color: '#1C1F24', fontWeight: '600' },
-  slotTextActive: { color: '#fff' },
+  slot: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border },
+  slotActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  slotText: { fontSize: 13, color: colors.text, fontWeight: '600' },
+  slotTextActive: { color: colors.white },
 });

@@ -1,5 +1,8 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View, type ViewStyle } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS, RADIUS } from '../theme';
 
 export const Button = ({
   title,
@@ -29,8 +32,8 @@ export const Button = ({
     ]}
   >
     <View style={styles.buttonContent}>
-      {loading ? <ActivityIndicator size="small" color={variant === 'secondary' ? '#1C1F24' : '#fff'} style={styles.buttonSpinner} /> : null}
-      <Text style={styles.buttonText}>{title}</Text>
+      {loading ? <ActivityIndicator size="small" color={variant === 'secondary' ? COLORS.primary : COLORS.white} style={styles.buttonSpinner} /> : null}
+      <Text style={[styles.buttonText, variant === 'secondary' && styles.buttonTextSecondary]}>{title}</Text>
     </View>
   </TouchableOpacity>
 );
@@ -90,9 +93,9 @@ export const Toast = ({ message }: { message: string }) => (
   </View>
 );
 
-export const Badge = ({ label, color = '#1D8A6C' }: { label: string; color?: string }) => (
+export const Badge = ({ label, color = COLORS.primaryLight }: { label: string; color?: string }) => (
   <View style={[styles.badge, { backgroundColor: color }]}>
-    <Text style={styles.badgeText}>{label}</Text>
+    <Text style={[styles.badgeText, color !== COLORS.primaryLight && styles.badgeTextOnColor]}>{label}</Text>
   </View>
 );
 
@@ -129,10 +132,18 @@ export const Avatar = ({ label, size = 40 }: { label: string; size?: number }) =
 );
 
 export const ScreenContainer = ({ children, style }: { children: React.ReactNode; style?: ViewStyle }) => (
-  <View style={[styles.screenContainer, style]}>{children}</View>
+  <SafeAreaView edges={['top', 'left', 'right']} style={[styles.screenContainer, style]}>{children}</SafeAreaView>
 );
 
 export const SectionHeader = ({ title }: { title: string }) => <Text style={styles.header}>{title}</Text>;
+
+export const Header = ({ title, subtitle, onBack, right }: { title: string; subtitle?: string; onBack?: () => void; right?: React.ReactNode }) => (
+  <View style={styles.headerRow}>
+    {onBack ? <TouchableOpacity onPress={onBack} accessibilityRole="button" accessibilityLabel="Go back" style={styles.backButton}><Ionicons name="arrow-back" size={20} color={COLORS.text} /></TouchableOpacity> : null}
+    <View style={styles.headerCopy}><Text style={styles.header}>{title}</Text>{subtitle ? <Text style={styles.headerSubtitle}>{subtitle}</Text> : null}</View>
+    {right}
+  </View>
+);
 
 export const BackendNotAvailable = ({ endpoint }: { endpoint: string }) => (
   <View style={styles.centered}>
@@ -151,43 +162,49 @@ export const InfoRow = ({ label, value }: { label: string; value?: string | null
 );
 
 const styles = StyleSheet.create({
-  button: { backgroundColor: '#1D8A6C', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 18, alignItems: 'center' },
+  button: { backgroundColor: COLORS.primary, borderRadius: RADIUS.full, paddingVertical: 13, paddingHorizontal: 18, alignItems: 'center' },
   buttonContent: { flexDirection: 'row', alignItems: 'center' },
   buttonSpinner: { marginRight: 8 },
-  secondary: { backgroundColor: '#EAF9F3' },
-  danger: { backgroundColor: '#D94A4A' },
+  secondary: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.primary },
+  danger: { backgroundColor: COLORS.danger },
   disabled: { opacity: 0.5 },
-  buttonText: { color: '#fff', fontWeight: '600' },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E5EAF0' },
+  buttonText: { color: COLORS.white, fontWeight: '600' },
+  buttonTextSecondary: { color: COLORS.primary },
+  card: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 16, borderWidth: 1, borderColor: COLORS.border, shadowColor: COLORS.text, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
   inputWrap: { marginBottom: 12 },
-  label: { fontSize: 12, color: '#5F6975', marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 12, backgroundColor: '#F7F9FC' },
+  label: { fontSize: 12, color: COLORS.textMuted, marginBottom: 6 },
+  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, backgroundColor: COLORS.background, color: COLORS.text },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 },
-  muted: { color: '#5F6975', marginTop: 8 },
-  error: { color: '#D94A4A', marginTop: 8 },
-  toast: { backgroundColor: '#1C1F24', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 10, position: 'absolute', bottom: 32, left: 16, right: 16 },
-  toastText: { color: '#fff', textAlign: 'center' },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, alignSelf: 'flex-start' },
-  badgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  muted: { color: COLORS.textMuted, marginTop: 8 },
+  error: { color: COLORS.danger, marginTop: 8 },
+  toast: { backgroundColor: COLORS.text, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 10, position: 'absolute', bottom: 32, left: 16, right: 16 },
+  toastText: { color: COLORS.white, textAlign: 'center' },
+  badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, alignSelf: 'flex-start' },
+  badgeText: { color: COLORS.primary, fontSize: 10, fontWeight: '700' },
+  badgeTextOnColor: { color: COLORS.white },
   tabs: { flexDirection: 'row', gap: 8 },
-  tab: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#F3F7F6' },
-  tabActive: { backgroundColor: '#1D8A6C' },
-  tabText: { color: '#5F6975' },
-  tabTextActive: { color: '#fff', fontWeight: '600' },
+  tab: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border },
+  tabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  tabText: { color: COLORS.textMuted },
+  tabTextActive: { color: COLORS.white, fontWeight: '600' },
   modal: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.33)', justifyContent: 'center', padding: 24 },
-  dialog: { backgroundColor: '#fff', borderRadius: 16, padding: 20 },
+  dialog: { backgroundColor: COLORS.white, borderRadius: RADIUS.lg, padding: 20 },
   dialogTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
   dialogActions: { marginTop: 16, flexDirection: 'row', gap: 12, justifyContent: 'flex-end' },
-  avatar: { backgroundColor: '#EAF9F3', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#1D8A6C', fontWeight: '700' },
-  screenContainer: { flex: 1, backgroundColor: '#F7F9FC', padding: 16 },
-  header: { fontSize: 18, fontWeight: '700', color: '#1C1F24', marginBottom: 12 },
+  avatar: { backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.primary },
+  avatarText: { color: COLORS.primary, fontWeight: '700' },
+  screenContainer: { flex: 1, backgroundColor: COLORS.background, padding: 16 },
+  header: { fontSize: 22, fontWeight: '800', color: COLORS.text, marginBottom: 5 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  headerCopy: { flex: 1 },
+  headerSubtitle: { color: COLORS.textMuted, fontSize: 14, lineHeight: 20 },
+  backButton: { width: 42, height: 42, marginRight: 12, borderRadius: 21, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border },
   unavailableIcon: { fontSize: 36, marginBottom: 8 },
-  unavailableTitle: { fontSize: 16, fontWeight: '700', color: '#1C1F24', marginBottom: 4 },
-  unavailableEndpoint: { fontSize: 12, color: '#8899AA', fontFamily: 'monospace', marginBottom: 4 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderColor: '#E5EAF0' },
-  infoLabel: { fontSize: 14, color: '#5F6975', flex: 1 },
-  infoValue: { fontSize: 14, fontWeight: '600', color: '#1C1F24', flex: 2, textAlign: 'right' },
+  unavailableTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
+  unavailableEndpoint: { fontSize: 12, color: COLORS.textMuted, fontFamily: 'monospace', marginBottom: 4 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderColor: COLORS.border },
+  infoLabel: { fontSize: 14, color: COLORS.textMuted, flex: 1 },
+  infoValue: { fontSize: 14, fontWeight: '600', color: COLORS.text, flex: 2, textAlign: 'right' },
 });
 
 export default {
@@ -207,4 +224,5 @@ export default {
   SectionHeader,
   BackendNotAvailable,
   InfoRow,
+  Header,
 };

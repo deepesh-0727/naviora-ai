@@ -1,24 +1,25 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
+import { Ionicons } from '@expo/vector-icons';
 import {
   Alert,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api, type PatientNotification } from '../../shared/services/api';
 import { websocketClient } from '../../shared/services/websocket';
 import type { PatientRootParamList } from '../navigator/PatientNavigator';
+import { colors } from '../../shared/theme/colors';
 import {
   BackendNotAvailable,
   Card,
-  EmptyState,
   ErrorState,
   Loader,
   SectionHeader,
@@ -28,7 +29,7 @@ type FilterKey = 'all' | 'unread' | 'read';
 type PatientNavigation = StackNavigationProp<PatientRootParamList>;
 
 const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: 'All' },
+  { key: 'all', label: 'All Alerts' },
   { key: 'unread', label: 'Unread' },
   { key: 'read', label: 'Read' },
 ];
@@ -87,6 +88,16 @@ export default function NotificationsScreen() {
     }
   }, []);
 
+  const markAllRead = useCallback(async () => {
+    const unread = notifs.filter((item) => !item.is_read);
+    try {
+      await Promise.all(unread.map((item) => api.patient.markNotificationRead(item.id)));
+      setNotifs((previous) => previous.map((item) => ({ ...item, is_read: true })));
+    } catch {
+      Alert.alert('Could not update alerts', 'Please try again.');
+    }
+  }, [notifs]);
+
   const deleteNotif = useCallback(async (id: number) => {
     Alert.alert('Delete notification?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
@@ -134,6 +145,7 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.headingRow}><View><Text style={styles.heading}>Hospital Alerts</Text><Text style={styles.subtitle}>Live queue, emergency and test notifications</Text></View><TouchableOpacity style={styles.markAll} onPress={() => void markAllRead()} disabled={!notifs.some((item) => !item.is_read)}><Ionicons name="checkmark-done-outline" size={17} color={colors.primary} /><Text style={styles.markAllText}>Mark Read</Text></TouchableOpacity></View>
       <View style={styles.filterRow}>
         {FILTERS.map((f) => (
           <TouchableOpacity
@@ -174,7 +186,7 @@ export default function NotificationsScreen() {
               {earlier.map((n) => <NotifCard key={n.id} item={n} onRead={markRead} onDelete={deleteNotif} onFeedback={(id) => navigation.navigate('Feedback', { appointmentId: id })} />)}
             </>
           )}
-          {filtered.length === 0 && <EmptyState message="No notifications" />}
+          {filtered.length === 0 && <View style={styles.emptyState}><Ionicons name="notifications-off-outline" size={48} color={colors.textMuted} /><Text style={styles.emptyTitle}>All Caught Up</Text><Text style={styles.emptyText}>You have no new alerts in this category. Live appointment queue updates will appear here.</Text></View>}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -232,21 +244,29 @@ function NotifCard({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F7F9FC' },
+  safe: { flex: 1, backgroundColor: colors.background },
+  headingRow: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  heading: { color: colors.text, fontSize: 22, fontWeight: '800' },
+  subtitle: { color: colors.textMuted, fontSize: 13, marginTop: 3, maxWidth: 215 },
+  markAll: { backgroundColor: colors.white, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  markAllText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
   filterRow: { flexDirection: 'row', padding: 16, gap: 8 },
-  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: '#EEF2F7', borderWidth: 1, borderColor: '#DDE5EE' },
-  chipActive: { backgroundColor: '#1D8A6C', borderColor: '#1D8A6C' },
-  chipText: { fontSize: 13, color: '#5F6975', fontWeight: '600' },
-  chipTextActive: { color: '#fff' },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
+  chipTextActive: { color: colors.white },
   scroll: { paddingHorizontal: 16, paddingBottom: 100 },
   notifCard: { marginBottom: 8 },
-  notifUnread: { borderLeftWidth: 3, borderLeftColor: '#1D8A6C' },
+  notifUnread: { borderLeftWidth: 3, borderLeftColor: colors.primary },
   notifRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  notifTitle: { fontSize: 14, fontWeight: '700', color: '#1C1F24' },
-  notifBody: { fontSize: 13, color: '#5F6975', marginTop: 2 },
-  notifTime: { fontSize: 11, color: '#8899AA', marginTop: 4 },
+  notifTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+  notifBody: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  notifTime: { fontSize: 11, color: colors.textMuted, marginTop: 4 },
   notifActions: { gap: 6 },
   actionBtn: { padding: 4 },
-  feedbackButton: { alignSelf: 'flex-start', backgroundColor: '#1D8A6C', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8 },
-  feedbackButtonText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  feedbackButton: { alignSelf: 'flex-start', backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8 },
+  feedbackButtonText: { color: colors.white, fontWeight: '700', fontSize: 12 },
+  emptyState: { margin: 16, minHeight: 220, padding: 22, borderRadius: 20, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { color: colors.text, fontSize: 18, fontWeight: '800', marginTop: 14 },
+  emptyText: { color: colors.textMuted, textAlign: 'center', marginTop: 6, lineHeight: 20 },
 });

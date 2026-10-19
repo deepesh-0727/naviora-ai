@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 
 import { useTheme } from '../../context/ThemeContext';
+import { COLORS } from '../../shared/theme';
 import { NavioraText, GlassCard, GradientButton, FloatingLabelInput } from '../../components/common/AtomicComponents';
 import { apiService } from '../../services/api';
 
@@ -131,15 +131,15 @@ export default function RegistrationScreen({ navigation }: any) {
   };
 
   return (
-    <LinearGradient colors={theme.colors.gradients.primary} style={styles.container}>
-      <StatusBar style="light" />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar style="dark" />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => (step > 1 ? setStep(step - 1) : navigation.goBack())} style={styles.backBtn}>
-            <Ionicons name={step > 1 ? "arrow-back" : "close"} size={28} color="#FFF" />
+            <Ionicons name={step > 1 ? "arrow-back" : "close"} size={24} color={COLORS.primary} />
           </TouchableOpacity>
           <View style={styles.progressBarContainer}>
-            <View style={[styles.progressBar, { backgroundColor: theme.colors.glass.bg }]}>
+            <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
               <View style={[styles.progressFill, { width: `${(step / 3) * 100}%`, backgroundColor: theme.colors.primary }]} />
             </View>
           </View>
@@ -170,7 +170,7 @@ export default function RegistrationScreen({ navigation }: any) {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 

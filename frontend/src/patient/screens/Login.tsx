@@ -10,10 +10,10 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 import { useTheme } from '../../context/ThemeContext';
+import { COLORS } from '../../shared/theme';
 import { useAuth, type LoginZone } from '../../context/AuthContext';
 import {
   NavioraText,
@@ -58,30 +58,30 @@ export default function LoginScreen({ navigation, route }: any) {
   };
 
   return (
-    <LinearGradient colors={theme.colors.gradients.primary} style={styles.container}>
-      <StatusBar style="light" />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar style="dark" />
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.kav}>
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Animated.View entering={FadeInDown.delay(200).duration(800)} style={styles.header}>
               <TouchableOpacity onPress={() => navigation.navigate('RoleSelect')} style={styles.backToRoles}>
-                <Ionicons name="chevron-back" size={18} color="#FFF" />
-                <NavioraText type="label" color="inverse" style={{ marginLeft: 4 }}>Change account type</NavioraText>
+                <Ionicons name="chevron-back" size={18} color={COLORS.primary} />
+                <NavioraText type="label" color="primary" style={{ marginLeft: 4 }}>Change account type</NavioraText>
               </TouchableOpacity>
               <View style={styles.logoRow}>
-                <View style={[styles.logoIcon, { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)' }]}>
-                  <Ionicons name="pulse" size={32} color="#FFF" />
+                <View style={[styles.logoIcon, { backgroundColor: COLORS.primaryLight, borderColor: COLORS.border }]}>
+                  <Ionicons name="pulse" size={32} color={COLORS.primary} />
                 </View>
-                <NavioraText type="h2" color="inverse" style={{ marginLeft: 12 }}>Naviora AI</NavioraText>
+                <NavioraText type="h2" color="primary" style={{ marginLeft: 12 }}>Naviora AI</NavioraText>
               </View>
-              <NavioraText type="h1" color="inverse" style={styles.welcomeText}>{zoneTitle} sign in</NavioraText>
-              <NavioraText type="body" color="inverse" style={{ opacity: 0.75 }}>Sign in to continue your healthcare journey</NavioraText>
+              <NavioraText type="h1" color="primary" style={styles.welcomeText}>Welcome to Naviora AI</NavioraText>
+              <NavioraText type="body" color="low">{zoneTitle} · Hospital coordination and voice assistant</NavioraText>
             </Animated.View>
 
             <Animated.View entering={FadeInUp.delay(400).duration(800)}>
               <GlassCard style={styles.formCard}>
                 <View style={styles.formHeader}>
-                  <NavioraText type="label" color="low">SECURE ACCESS</NavioraText>
+              <NavioraText type="label" color="low">SECURE ACCESS</NavioraText>
                   <StatusBadge text="HIPAA" color="accent" icon="shield-checkmark" />
                 </View>
 
@@ -118,7 +118,7 @@ export default function LoginScreen({ navigation, route }: any) {
               </GlassCard>
 
               {zone === 'patient' ? (
-                <GlassCard style={styles.registerCard}>
+              <GlassCard style={styles.registerCard}>
                   <TouchableOpacity
                     accessibilityRole="button"
                     onPress={() => navigation.navigate('Registration')}
@@ -132,7 +132,7 @@ export default function LoginScreen({ navigation, route }: any) {
                     style={[styles.registerBtn, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}
                     onPress={() => navigation.navigate('Registration')}
                   >
-                    <Ionicons name="person-add-outline" size={20} color="#FFF" style={{ marginRight: 10 }} />
+                    <Ionicons name="person-add-outline" size={20} color={COLORS.white} style={{ marginRight: 10 }} />
                     <NavioraText type="label" color="inverse">Create Account</NavioraText>
                   </TouchableOpacity>
                 </GlassCard>
@@ -140,13 +140,13 @@ export default function LoginScreen({ navigation, route }: any) {
             </Animated.View>
 
             <View style={styles.footer}>
-              <Ionicons name="shield-checkmark" size={16} color={theme.colors.primaryLight} />
-              <NavioraText type="xs" color="inverse" style={{ marginLeft: 6, opacity: 0.6 }}>Secure • Private • Encrypted</NavioraText>
+              <Ionicons name="shield-checkmark" size={16} color={theme.colors.primary} />
+              <NavioraText type="xs" color="low" style={{ marginLeft: 6 }}>Secure • Private • Encrypted</NavioraText>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -165,6 +165,6 @@ const styles = StyleSheet.create({
   forgotBtn: { alignSelf: 'flex-end', marginBottom: 24 },
   errorBox: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, marginTop: 16 },
   registerCard: { padding: 20, marginBottom: 16, alignItems: 'center' },
-  registerBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 24, borderRadius: 14, borderWidth: 1.5, width: '100%', justifyContent: 'center' },
+  registerBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 24, borderRadius: 999, borderWidth: 1.5, width: '100%', justifyContent: 'center' },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8 },
 });

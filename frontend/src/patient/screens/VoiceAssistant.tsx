@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Audio } from 'expo-av';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../shared/services/api';
 import {
   BackendNotAvailable,
@@ -230,7 +231,8 @@ export default function VoiceAssistantScreen() {
 
   return (
     <ScreenContainer style={styles.screen}>
-      <SectionHeader title="Voice Assistant" />
+      <View style={styles.voiceHeader}><View style={styles.voiceHeading}><SectionHeader title="Naviora Voice AI" /><Text style={styles.voiceSubtitle}>Hospital triage and wayfinding</Text></View><Badge label="Live Agent" /></View>
+      <View style={styles.suggestions}><Text style={styles.suggestion}>Check my queue</Text><Text style={styles.suggestion}>Book an appointment</Text><Text style={styles.suggestion}>Find a department</Text></View>
       {screenError ? <Text accessibilityRole="alert" style={styles.screenError}>{screenError}</Text> : null}
       {messages.length ? (
         <FlatList
@@ -245,7 +247,7 @@ export default function VoiceAssistantScreen() {
               styles.bubble,
               item.role === 'user' ? styles.userBubble : item.role === 'error' ? styles.errorBubble : styles.agentBubble,
             ]}>
-              {item.fallbackUsed ? <Badge label="Rule mode" color="#7A828C" /> : null}
+              {item.fallbackUsed ? <Badge label="Rule mode" color={colors.textMuted} /> : null}
               <Text style={item.role === 'user' ? styles.userText : item.role === 'error' ? styles.errorText : styles.agentText}>
                 {item.text}
               </Text>
@@ -261,6 +263,7 @@ export default function VoiceAssistantScreen() {
 
       <View style={styles.controls}>
         {status === 'processing' ? <ActivityIndicator size="large" color={colors.primary} style={styles.spinner} /> : null}
+        <View style={styles.waveform} accessibilityLabel="Audio waveform"><View style={styles.waveBar} /><View style={styles.waveBarTall} /><View style={styles.waveBar} /><View style={styles.waveBarTall} /><View style={styles.waveBar} /><View style={styles.waveBarTall} /><View style={styles.waveBar} /><View style={styles.waveBarTall} /><View style={styles.waveBar} /></View>
         <Animated.View style={{ transform: [{ scale: pulse }] }}>
           <TouchableOpacity
             accessibilityRole="button"
@@ -270,7 +273,7 @@ export default function VoiceAssistantScreen() {
             onPressOut={handlePressOut}
             style={[styles.mic, status === 'recording' && styles.recording]}
           >
-            <Text style={styles.micText}>{status === 'recording' ? '●' : '🎙'}</Text>
+            <Ionicons name={status === 'recording' ? 'radio-button-on' : 'mic'} size={30} color={colors.white} />
           </TouchableOpacity>
         </Animated.View>
         <Text style={styles.hint}>
@@ -293,7 +296,7 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '84%', padding: 12, borderRadius: 14, marginVertical: 5 },
   userBubble: { alignSelf: 'flex-end', backgroundColor: colors.primary },
   agentBubble: { alignSelf: 'flex-start', backgroundColor: colors.white },
-  errorBubble: { alignSelf: 'flex-start', backgroundColor: '#FFF0F0', borderColor: colors.danger, borderWidth: 1 },
+  errorBubble: { alignSelf: 'flex-start', backgroundColor: colors.dangerLight, borderColor: colors.danger, borderWidth: 1 },
   userText: { color: colors.white },
   agentText: { color: colors.text },
   errorText: { color: colors.danger },
@@ -304,4 +307,12 @@ const styles = StyleSheet.create({
   recording: { backgroundColor: colors.danger },
   micText: { color: colors.white, fontWeight: '700', fontSize: 24 },
   hint: { textAlign: 'center', color: colors.textMuted, padding: 8 },
+  voiceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  voiceHeading: { flex: 1 },
+  voiceSubtitle: { color: colors.textMuted, marginTop: -4 },
+  suggestions: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  suggestion: { color: colors.primary, fontSize: 12, fontWeight: '600', backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8, overflow: 'hidden' },
+  waveform: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 12 },
+  waveBar: { height: 10, width: 4, borderRadius: 2, backgroundColor: colors.primary },
+  waveBarTall: { height: 17, width: 4, borderRadius: 2, backgroundColor: colors.primary },
 });

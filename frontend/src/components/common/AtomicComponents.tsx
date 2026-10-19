@@ -89,7 +89,7 @@ export const GradientButton = ({
     >
       <LinearGradient
         colors={variant === 'secondary' ? [theme.colors.surface, theme.colors.primaryLight] : colors}
-        style={[styles.btnGradient, { borderRadius: theme.borderRadius.sm, borderWidth: variant === 'secondary' ? 1 : 0, borderColor: theme.colors.primary }]}
+        style={[styles.btnGradient, { borderRadius: theme.borderRadius.full, borderWidth: variant === 'secondary' ? 1 : 0, borderColor: theme.colors.primary }]}
       >
         {loading ? (
           <ActivityIndicator color={textColor} size="small" />
@@ -206,7 +206,7 @@ export const NavioraCard = GlassCard;
 export const NavioraHeader = ({ title, subtitle, onBack, rightAction, showBack = true }: any) => {
   const theme = useTheme();
   return (
-    <View style={[styles.headerWrap, { backgroundColor: theme.colors.background }]}> 
+    <View style={[styles.headerWrap, { backgroundColor: theme.colors.background }]}>
       <View style={styles.headerRow}>
         {showBack ? (
           <TouchableOpacity onPress={onBack} style={styles.iconButton} activeOpacity={0.8}>
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 2,
     padding: 16,
