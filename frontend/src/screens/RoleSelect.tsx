@@ -2,9 +2,9 @@ import React from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { GlassCard, NavioraText } from '../components/common/AtomicComponents';
+import { COLORS } from '../shared/theme';
 
 type LoginZone = 'patient' | 'staff' | 'admin';
 
@@ -14,21 +14,21 @@ const zones: { id: LoginZone; title: string; description: string; icon: React.Co
     title: 'Patient',
     description: 'Appointments, care updates, and hospital services',
     icon: 'heart',
-    color: '#3B82F6',
+    color: COLORS.primary,
   },
   {
     id: 'staff',
     title: 'Healthcare Staff',
     description: 'Clinical workflows for doctors, nurses, and staff',
     icon: 'medkit',
-    color: '#10B981',
+    color: '#159B78',
   },
   {
     id: 'admin',
     title: 'Administrator',
     description: 'Hospital operations and system management',
     icon: 'business',
-    color: '#8B5CF6',
+    color: '#7457B8',
   },
 ];
 
@@ -36,16 +36,16 @@ export default function RoleSelectScreen({ navigation }: any) {
   const theme = useTheme();
 
   return (
-    <LinearGradient colors={theme.colors.gradients.primary} style={styles.container}>
-      <StatusBar style="light" />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar style="dark" />
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.brand}>
             <View style={styles.logo}>
-              <Ionicons name="pulse" size={32} color="#FFF" />
+              <Ionicons name="pulse" size={32} color={COLORS.primary} />
             </View>
-            <NavioraText type="h1" color="inverse" style={styles.title}>Naviora AI</NavioraText>
-            <NavioraText type="body" color="inverse" style={styles.subtitle}>
+            <NavioraText type="h1" color="primary" style={styles.title}>Naviora AI</NavioraText>
+            <NavioraText type="body" color="low" style={styles.subtitle}>
               Choose the account type you use to sign in.
             </NavioraText>
           </View>
@@ -72,12 +72,12 @@ export default function RoleSelectScreen({ navigation }: any) {
             ))}
           </View>
 
-          <NavioraText type="xs" color="inverse" style={styles.disclaimer}>
+          <NavioraText type="xs" color="low" style={styles.disclaimer}>
             Your role and access are verified by your account after sign-in.
           </NavioraText>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -90,17 +90,19 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 18,
   },
   title: { marginBottom: 8 },
-  subtitle: { opacity: 0.78, textAlign: 'center' },
+  subtitle: { textAlign: 'center' },
   zoneList: { gap: 14 },
   zoneCard: { flexDirection: 'row', alignItems: 'center', padding: 18 },
   zoneIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   zoneText: { flex: 1, marginHorizontal: 16 },
   description: { marginTop: 4 },
-  disclaimer: { opacity: 0.65, textAlign: 'center', marginTop: 28 },
+  disclaimer: { textAlign: 'center', marginTop: 28 },
 });
