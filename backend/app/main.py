@@ -29,6 +29,7 @@ from app.core.exceptions import (
 from app.api.v1.router import api_router
 from app.api.v1.endpoints.health import router as health_router
 from app.db.init_db import init_db
+from app.db.schema_diff import inspect_database
 from app.db.session import SessionLocal
 from app.models.user import User
 from app.core.monitoring import PrometheusMetricsMiddleware
@@ -261,6 +262,16 @@ async def on_startup():
             logger.info("Clinical Database Connection Verified")
     except Exception as e:
         logger.warning(f"Database link deferred or unreachable: {e}")
+    try:
+        schema_differences = await inspect_database()
+        if schema_differences:
+            logger.warning(
+                "Database schema drift detected (%s differences):\n%s",
+                len(schema_differences),
+                "\n".join(f"- {difference}" for difference in schema_differences),
+            )
+    except Exception:
+        logger.exception("Database schema drift check could not complete")
 
 
 @app.on_event("shutdown")

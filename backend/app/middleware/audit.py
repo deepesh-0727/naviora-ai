@@ -2,7 +2,7 @@ import logging
 from time import perf_counter
 
 from fastapi import Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.models.hospital import AuditLog
@@ -36,8 +36,8 @@ class AuditMiddleware(BaseHTTPMiddleware):
         user_agent = request.headers.get("user-agent", "")[:255] or None
         duration_ms = (perf_counter() - started) * 1000
         session_factory = request.app.state.audit_session_factory
-        async with session_factory() as db:
-            try:
+        try:
+            async with session_factory() as db:
                 db.add(
                     AuditLog(
                         user_id=user_id,
@@ -52,11 +52,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     )
                 )
                 await db.commit()
-            except Exception:
-                await db.rollback()
-                logger.exception("Audit log write failed for %s %s", request.method, path)
-                return JSONResponse(
-                    status_code=503,
-                    content={"detail": "Audit logging is unavailable."},
-                )
+        except Exception:
+            logger.exception(
+                "Audit log write failed; continuing with response for %s %s",
+                request.method,
+                path,
+            )
         return response
