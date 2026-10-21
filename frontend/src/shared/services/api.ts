@@ -259,7 +259,7 @@ export const api = {
         params: { from: startNode, to: endNode, accessible },
       }),
     getNavigationAmenities: () =>
-      apiClient.get<{ pois?: Array<{ name: string; location: string }> }>(buildApiUrl('patient', '/navigation/amenities'), { params: { type: 'restroom' } }),
+      apiClient.get<{ pois?: Array<{ name: string; location: string }> }>(buildApiUrl('patient', '/navigation/poi')),
     processVoice: (form: FormData) =>
       apiClient.post<{
         text?: string;

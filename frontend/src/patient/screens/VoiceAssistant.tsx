@@ -41,8 +41,32 @@ type Message = {
   fallbackUsed?: boolean;
 };
 
-type RequestError = { response?: { status?: number } };
+type RequestError = { response?: { status?: number; data?: unknown }; message?: string };
 type ScreenStatus = 'idle' | 'recording' | 'processing';
+
+function apiErrorMessage(cause: unknown, fallback: string): string {
+  const error = cause as RequestError;
+  const data = error.response?.data;
+  if (data && typeof data === 'object') {
+    const payload = data as { detail?: unknown; message?: unknown; error?: unknown };
+    for (const value of [payload.detail, payload.message, payload.error]) {
+      if (typeof value === 'string' && value.trim()) return value;
+    }
+    if (Array.isArray(payload.detail)) {
+      const messages = payload.detail.flatMap((item: unknown) => {
+        if (!item || typeof item !== 'object') return [];
+        const detail = item as { msg?: unknown; loc?: unknown };
+        if (typeof detail.msg !== 'string') return [];
+        const location = Array.isArray(detail.loc)
+          ? detail.loc.filter((part): part is string | number => typeof part === 'string' || typeof part === 'number').filter((part) => part !== 'body').join('.')
+          : '';
+        return [location ? `${location}: ${detail.msg}` : detail.msg];
+      });
+      if (messages.length) return messages.join(' ');
+    }
+  }
+  return typeof error.message === 'string' && error.message.trim() ? error.message : fallback;
+}
 
 export default function VoiceAssistantScreen() {
   const [permission, setPermission] = useState<boolean | null>(null);
@@ -123,7 +147,7 @@ export default function VoiceAssistantScreen() {
           ? 'audio/3gpp'
           : extension === 'wav'
             ? 'audio/wav'
-            : 'audio/m4a';
+            : 'audio/mp4';
       form.append('audio', {
         uri,
         name: `voice.${extension}`,
@@ -159,9 +183,9 @@ export default function VoiceAssistantScreen() {
       } else if (code === 413) {
         addErrorMessage('This recording is too large to upload. Please record a shorter request.');
       } else if (code === 415 || code === 422) {
-        addErrorMessage('The server could not read this audio format. Please record a new voice request.');
+        addErrorMessage(apiErrorMessage(cause, 'The server could not read this audio format. Please record a new voice request.'));
       } else {
-        addErrorMessage('Something went wrong. Tap to retry.');
+        addErrorMessage(apiErrorMessage(cause, 'Something went wrong. Tap to retry.'));
       }
     }
   };
