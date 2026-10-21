@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Location from 'expo-location';
 import { useRole } from '../../shared/contexts/RoleContext';
-import { api } from '../../shared/services/api';
+import { api, type PatientProfile } from '../../shared/services/api';
 import { websocketClient } from '../../shared/services/websocket';
 import { BackendNotAvailable, Card, ErrorState, InfoRow, ScreenContainer, SectionHeader } from '../../shared/components';
 import { colors } from '../../shared/theme/colors';
@@ -12,6 +12,7 @@ type RequestError = { response?: { status?: number } };
 
 export default function EmergencyScreen() {
   const { user } = useRole();
+  const [profile, setProfile] = useState<PatientProfile | null>(null);
   const [holding, setHolding] = useState(false);
   const [triggering, setTriggering] = useState(false);
   const [caseId, setCaseId] = useState<number | null>(null);
@@ -27,6 +28,16 @@ export default function EmergencyScreen() {
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const triggeredAt = useRef<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void api.patient.getProfile()
+      .then((response) => { if (active) setProfile(response.data); })
+      .catch((cause: unknown) => {
+        console.warn('Emergency screen could not load patient profile:', cause instanceof Error ? cause.message : String(cause));
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     void websocketClient.connect();
@@ -83,7 +94,7 @@ export default function EmergencyScreen() {
     {unavailable ? <BackendNotAvailable endpoint="POST /emergency/trigger" /> : null}
     {error ? <ErrorState message={error} onRetry={() => setError(null)} /> : null}
     {responseMessage ? <Card><Text style={styles.warning}>{responseMessage}</Text></Card> : null}
-    <Card style={styles.card}><Text style={styles.cardTitle}>Critical information</Text><InfoRow label="Name" value={user?.name} /><InfoRow label="Blood group" value={typeof user?.blood_group === 'string' ? user.blood_group : null} /><InfoRow label="Allergies" value={Array.isArray(user?.allergies) ? user.allergies.join(', ') : null} /><InfoRow label="Emergency contact" value={typeof user?.emergency_contact === 'string' ? user.emergency_contact : null} /></Card>
+    <Card style={styles.card}><Text style={styles.cardTitle}>Critical information</Text><InfoRow label="Name" value={[profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || user?.name} /><InfoRow label="Blood group" value={profile?.blood_group ?? user?.blood_group ?? null} /><InfoRow label="Allergies" value={Array.isArray(profile?.allergies) ? profile.allergies.join(', ') : Array.isArray(user?.allergies) ? user.allergies.join(', ') : null} /><InfoRow label="Emergency contact" value={profile?.emergency_contact_name ?? null} /><InfoRow label="Contact phone" value={profile?.emergency_contact ?? user?.emergency_contact ?? null} /></Card>
     {caseId !== null ? <Card style={styles.card}><Text style={styles.cardTitle}>Live response tracking</Text><InfoRow label="Assigned responder" value={responderName ?? 'Waiting for staff assignment'} /><InfoRow label="ETA" value={etaMinutes === null ? 'Pending staff update' : `${etaMinutes} min`} />{timeline.map((step, index) => <Text style={styles.step} key={`${step}-${index}`}>●  {step}</Text>)}{cancelAvailable ? <TouchableOpacity onPress={() => void cancelEmergency()} style={styles.cancel}><Text style={styles.cancelText}>Cancel request</Text></TouchableOpacity> : null}</Card> : null}
   </ScreenContainer>;
 }

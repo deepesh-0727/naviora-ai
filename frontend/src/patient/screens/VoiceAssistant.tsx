@@ -125,10 +125,14 @@ export default function VoiceAssistantScreen() {
       recognitionActiveRef.current = false;
       stopRequestedRef.current = false;
       setStatus('idle');
+      console.error('Speech recognition error:', event.error, event.message);
       if (event.error !== 'aborted') {
+        if (event.error === 'not-allowed') setPermission(false);
         addErrorMessage(event.error === 'not-allowed'
-          ? 'Microphone or speech recognition permission was denied.'
-          : 'Speech recognition failed. Please try again.');
+          ? 'Microphone or speech recognition permission was denied. Open Settings to allow access.'
+          : event.error === 'service-not-allowed'
+            ? 'No speech recognition service is available. Enable a speech service on this device and try again.'
+            : `Speech recognition failed (${event.error}). Please try again.`);
       }
     });
     return () => {
@@ -196,10 +200,13 @@ export default function VoiceAssistantScreen() {
       recognitionActiveRef.current = true;
       setStatus('recording');
       if (!pressedRef.current) stopListening();
-    } catch {
+    } catch (cause: unknown) {
       recognitionActiveRef.current = false;
       setStatus('idle');
-      setScreenError('Could not start speech recognition. Check microphone access and try again.');
+      console.error('Speech recognition start failed:', cause);
+      setScreenError(cause instanceof Error && cause.message
+        ? `Could not start speech recognition: ${cause.message}`
+        : 'Could not start speech recognition. Check microphone access and try again.');
     }
   };
 
