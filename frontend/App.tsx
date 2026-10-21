@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import * as Sentry from '@sentry/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -20,6 +20,7 @@ import { QueueProvider } from './src/context/QueueContext';
 import { AlertProvider } from './src/context/AlertContext';
 import { LanguageProvider } from './src/context/LanguageContext';
 import { RoleProvider } from './src/shared/contexts/RoleContext';
+import { subscribeToAuthExpired } from './src/shared/services/auth_events';
 import { GlobalAlert } from './src/components/common/GlobalAlert';
 import SplashScreen from './src/patient/screens/Splash';
 import RoleSelectScreen from './src/screens/RoleSelect';
@@ -42,6 +43,16 @@ if (sentryDsn) {
 function RootNavigator() {
   const { user } = useAuth();
   const authenticated = user !== null;
+  const [expiredZone, setExpiredZone] = useState<'patient' | 'staff' | 'admin' | null>(null);
+
+  useEffect(() => subscribeToAuthExpired(() => {
+    const role = user?.role;
+    setExpiredZone(role === 'patient' ? 'patient' : role === 'admin' || role === 'super_admin' ? 'admin' : role ? 'staff' : null);
+  }), [user]);
+
+  useEffect(() => {
+    if (authenticated) setExpiredZone(null);
+  }, [authenticated]);
 
   return (
     <NavigationContainer
@@ -53,7 +64,7 @@ function RootNavigator() {
       <GlobalAlert />
       <Stack.Navigator
         key={authenticated ? `authenticated-${user.role}` : 'unauthenticated'}
-        initialRouteName={authenticated ? 'Main' : 'Splash'}
+        initialRouteName={authenticated ? 'Main' : expiredZone ? 'Login' : 'Splash'}
         screenOptions={{
           headerStyle: {
             backgroundColor: '#F7F9F5',
@@ -78,7 +89,7 @@ function RootNavigator() {
           <>
             <Stack.Screen name="Splash" component={SplashScreen} options={{ headerShown: false }} />
             <Stack.Screen name="RoleSelect" component={RoleSelectScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Login" component={LoginScreen} initialParams={expiredZone ? { zone: expiredZone } : undefined} options={{ headerShown: false }} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Registration" component={RegistrationScreen} options={{ headerShown: false }} />
