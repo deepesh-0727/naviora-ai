@@ -96,6 +96,14 @@ class PatientProfileUpdate(BaseModel):
             return digits
         return value
 
+    @field_validator("emergency_contact", "emergency_contact_name", mode="before")
+    @classmethod
+    def normalize_optional_emergency_contact(cls, value: Optional[str]) -> Optional[str]:
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
 
 @router.get("/vitals")
 async def get_patient_vitals(

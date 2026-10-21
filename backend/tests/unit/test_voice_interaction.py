@@ -61,3 +61,33 @@ async def test_voice_process_persists_interaction_after_response(
     assert interaction.entities_json == {"department": "cardiology"}
     assert interaction.fallback_used is False
     assert interaction.response_text == "Appointment request recorded."
+
+
+@pytest.mark.asyncio
+async def test_voice_process_returns_retry_message_when_audio_cannot_be_transcribed(
+    async_client, db_session, monkeypatch
+):
+    user = User(
+        phone="+919811002102",
+        email="voice.transcription.failure@test.example",
+        password_hash="hash",
+        role="patient",
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    await db_session.commit()
+    token = create_access_token(subject=user.id, claims={"role": "patient"})
+    monkeypatch.setattr(stt_service.stt_service, "transcribe", AsyncMock(return_value=None))
+
+    response = await async_client.post(
+        "/api/v1/voice/process",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"return_audio": "false"},
+        files={"audio": ("request.m4a", b"unrecognized audio", "audio/mp4")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["text"] == ""
+    assert response.json()["response_text"] == "I couldn't hear that. Please try again."
+    assert response.json()["fallback_used"] is True

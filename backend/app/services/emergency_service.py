@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
+import sentry_sdk
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.emergency import EmergencyCase
@@ -18,7 +19,20 @@ class EmergencyService:
         Trigger an SOS event. Triages the emergency using AI and broadcasts to staff.
         """
         # AI Triage
-        triage_data = await self.agent.execute(description or "Immediate assistance needed at " + location, {})
+        triage_available = True
+        try:
+            triage_data = await self.agent.execute(description or "Immediate assistance needed at " + location, {})
+        except Exception as exc:
+            # Never let an unavailable AI service prevent recording an SOS.
+            logger.exception("Emergency triage unavailable; recording SOS with high priority")
+            sentry_sdk.capture_exception(exc)
+            triage_available = False
+            triage_data = {
+                "emergency_type": "unclassified",
+                "severity": 2,
+                "immediate_action_required": "Contact emergency services immediately.",
+                "fallback_used": True,
+            }
 
         # Log to DB
         db_emergency = EmergencyCase(
@@ -41,21 +55,34 @@ class EmergencyService:
             "description": db_emergency.description,
             "triage": triage_data
         }
-        await ws_manager.broadcast_event("emergency", "emergency_new", event_data)
+        notification_available = await ws_manager.broadcast_event("emergency", "emergency_new", event_data)
         if db_emergency.patient_id is not None:
-            await ws_manager.broadcast_event(f"patient:{db_emergency.patient_id}", "emergency_new", event_data)
+            patient_notification = await ws_manager.broadcast_event(f"patient:{db_emergency.patient_id}", "emergency_new", event_data)
+            notification_available = notification_available and patient_notification
 
         # Global broadcast for extreme critical cases (severity 1 or 2)
         if int(db_emergency.priority) <= 2:
-            await ws_manager.broadcast_event("emergency", "global_critical_alert", {
+            critical_notification = await ws_manager.broadcast_event("emergency", "global_critical_alert", {
                 "emergency_id": db_emergency.id,
                 "message": f"CRITICAL: Emergency at {location}. Clear routes for medical team.",
             })
+            notification_available = notification_available and critical_notification
+
+        if not notification_available:
+            logger.error("Emergency case %s saved without staff notification", db_emergency.id)
+            sentry_sdk.capture_message(
+                "Emergency case was saved but staff WebSocket notification could not be delivered",
+                level="error",
+            )
 
         return {
-            "status": "SOS triggered successfully",
+            "id": db_emergency.id,
             "emergency_id": db_emergency.id,
-            "triage": triage_data
+            "status": "SOS triggered successfully",
+            "triage": triage_data,
+            "message": "Emergency logged. Please call the hospital emergency line immediately.",
+            "triage_available": triage_available,
+            "notification_available": notification_available,
         }
 
     async def assign_staff(self, db: AsyncSession, emergency_id: int, staff_id: int):

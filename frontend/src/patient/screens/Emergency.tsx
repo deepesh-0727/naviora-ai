@@ -16,6 +16,7 @@ export default function EmergencyScreen() {
   const [triggering, setTriggering] = useState(false);
   const [caseId, setCaseId] = useState<number | null>(null);
   const [timeline, setTimeline] = useState<string[]>([]);
+  const [responseMessage, setResponseMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -44,7 +45,7 @@ export default function EmergencyScreen() {
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const location = `Lat: ${position.coords.latitude.toFixed(3)}, Lng: ${position.coords.longitude.toFixed(3)}`;
       const response = await api.patient.triggerEmergency({ location, description: 'Emergency triggered via app' });
-      setCaseId(response.data.id); setTimeline(['Emergency signal sent']); triggeredAt.current = Date.now(); setCancelAvailable(true);
+      setCaseId(response.data.id); setTimeline(['Emergency signal logged']); setResponseMessage(response.data.message ?? null); triggeredAt.current = Date.now(); setCancelAvailable(true);
       cancelTimer.current = setTimeout(() => { triggeredAt.current = null; setCancelAvailable(false); }, 30000);
     } catch (cause: unknown) {
       const code = (cause as RequestError).response?.status;
@@ -75,6 +76,7 @@ export default function EmergencyScreen() {
     {locationDenied ? <Card><Text style={styles.warning}>Enable location to send accurate emergency signal.</Text><TouchableOpacity onPress={() => Platform.OS === 'ios' ? void Linking.openURL('app-settings:') : void Linking.openSettings()}><Text style={styles.link}>Open Settings</Text></TouchableOpacity></Card> : null}
     {unavailable ? <BackendNotAvailable endpoint="POST /emergency/trigger" /> : null}
     {error ? <ErrorState message={error} onRetry={() => setError(null)} /> : null}
+    {responseMessage ? <Card><Text style={styles.warning}>{responseMessage}</Text></Card> : null}
     <Card style={styles.card}><Text style={styles.cardTitle}>Critical information</Text><InfoRow label="Name" value={user?.name} /><InfoRow label="Blood group" value={typeof user?.blood_group === 'string' ? user.blood_group : null} /><InfoRow label="Allergies" value={Array.isArray(user?.allergies) ? user.allergies.join(', ') : null} /><InfoRow label="Emergency contact" value={typeof user?.emergency_contact === 'string' ? user.emergency_contact : null} /></Card>
     {timeline.length ? <Card style={styles.card}><Text style={styles.cardTitle}>Response status</Text>{timeline.map((step, index) => <Text style={styles.step} key={`${step}-${index}`}>●  {step}</Text>)}{cancelAvailable ? <TouchableOpacity onPress={() => void cancelEmergency()} style={styles.cancel}><Text style={styles.cancelText}>Cancel request</Text></TouchableOpacity> : null}</Card> : null}
   </ScreenContainer>;

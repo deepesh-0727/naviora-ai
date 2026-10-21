@@ -205,6 +205,9 @@ export interface PatientNotification {
 export interface EmergencyCase {
   id: number;
   status: string;
+  message?: string;
+  triage_available?: boolean;
+  notification_available?: boolean;
   priority?: string;
   location?: string;
   assigned_staff?: Record<string, unknown> | null;

@@ -58,6 +58,7 @@ async def test_sos_trigger_persists_case_and_broadcasts_critical_alert(async_cli
     response = await async_client.post("/api/v1/emergency/trigger", headers=ctx["patient_headers"], json={"location": "Room 12", "description": "Chest pain"})
     created = await db_session.get(EmergencyCase, response.json()["emergency_id"])
     assert response.status_code == 200 and response.json()["triage"]["severity"] == 1
+    assert response.json()["id"] == created.id
     assert created.patient_id == ctx["patient"].id and created.location_desc == "Room 12"
     assert ctx["broadcast"].await_count == 3
 
@@ -73,6 +74,42 @@ async def test_sos_requires_patient_profile_and_supports_staff(async_client: Asy
     staff = await async_client.post("/api/v1/emergency/sos", headers=ctx["staff_headers"], json={"location": "Lobby"})
     assert (missing.status_code, missing.json()["detail"]) == (404, "Patient profile not found.")
     assert staff.status_code == 200 and staff.json()["status"] == "SOS triggered successfully"
+
+
+@pytest.mark.asyncio
+async def test_sos_is_persisted_when_triage_service_is_unavailable(async_client: AsyncClient, emergency_api_context, db_session, monkeypatch):
+    from app.services.emergency_service import emergency_service
+
+    ctx = emergency_api_context
+    monkeypatch.setattr(emergency_service.agent, "execute", AsyncMock(side_effect=RuntimeError("triage offline")))
+    response = await async_client.post(
+        "/api/v1/emergency/trigger",
+        headers=ctx["patient_headers"],
+        json={"location": "Room 12", "description": "Chest pain"},
+    )
+
+    created = await db_session.get(EmergencyCase, response.json()["id"])
+    assert response.status_code == 200
+    assert created is not None and created.priority == "2"
+    assert response.json()["triage_available"] is False
+    assert response.json()["message"] == "Emergency logged. Please call the hospital emergency line immediately."
+
+
+@pytest.mark.asyncio
+async def test_sos_response_remains_successful_when_staff_notification_fails(async_client: AsyncClient, emergency_api_context, db_session):
+    ctx = emergency_api_context
+    ctx["broadcast"].return_value = False
+    response = await async_client.post(
+        "/api/v1/emergency/trigger",
+        headers=ctx["patient_headers"],
+        json={"location": "Room 12", "description": "Chest pain"},
+    )
+
+    created = await db_session.get(EmergencyCase, response.json()["id"])
+    assert response.status_code == 200
+    assert created is not None
+    assert response.json()["notification_available"] is False
+    assert response.json()["message"] == "Emergency logged. Please call the hospital emergency line immediately."
 
 
 @pytest.mark.asyncio

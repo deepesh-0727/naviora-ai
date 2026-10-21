@@ -119,10 +119,17 @@ async def process_voice_command(
         )
 
     if "error" in result:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=result["error"],
-        )
+        if result["error"] == "Could not transcribe audio":
+            logger.info("[Voice/process] Audio transcription unavailable for user=%s", current_user.id)
+            return VoiceProcessResponse(
+                query="",
+                text="",
+                response_text="I couldn't hear that. Please try again.",
+                session_id=session_id,
+                fallback_used=True,
+                fallback_reason="audio_transcription_unavailable",
+            )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result["error"])
 
     if current_user.role == "patient":
         patient_id = await db.scalar(select(Patient.id).where(Patient.user_id == current_user.id))
