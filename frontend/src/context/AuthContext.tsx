@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '../services/api';
-import { saveTokens } from '../shared/services/secure_store';
+import { clearTokens, saveTokens } from '../shared/services/secure_store';
 
 export type UserRole = 'patient' | 'doctor' | 'nurse' | 'front_desk' | 'pharmacy' | 'facilities' | 'emergency' | 'staff' | 'admin' | 'super_admin';
 export type LoginZone = 'patient' | 'staff' | 'admin';
@@ -61,14 +61,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, error: result.error || 'Incorrect email/phone number or password.' };
     }
 
-    // Store tokens in SecureStore for the shared API client and AsyncStorage
-    // for existing legacy service paths that still read from AsyncStorage.
-    await saveTokens(result.data.access_token, result.data.refresh_token);
-    console.log('TOKEN SAVED SUCCESSFULLY');
-    await AsyncStorage.setItem('access_token', result.data.access_token);
-    if (result.data.refresh_token) {
-      await AsyncStorage.setItem('refresh_token', result.data.refresh_token);
+    // Keep the token available to both the shared SecureStore client and legacy
+    // AsyncStorage clients. SecureStore failures must not prevent login.
+    let secureStoreSaved = false;
+    try {
+      await saveTokens(result.data.access_token, result.data.refresh_token);
+      secureStoreSaved = true;
+    } catch (storageError) {
+      console.log('SECURESTORE TOKEN SAVE FAILED:', storageError instanceof Error ? storageError.message : storageError);
     }
+    const tokenEntries: [string, string][] = [['access_token', result.data.access_token]];
+    if (result.data.refresh_token) {
+      tokenEntries.push(['refresh_token', result.data.refresh_token]);
+    }
+    await AsyncStorage.multiSet(tokenEntries);
+    console.log(secureStoreSaved ? 'TOKENS SAVED TO BOTH STORES' : 'TOKENS SAVED TO ASYNC STORAGE; SECURESTORE UNAVAILABLE');
 
     const meRes = await apiService.get<any>('/auth/me');
     const profileRes = meRes.data ? { data: undefined } : await apiService.get<any>('/patients/profile');
@@ -76,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const userData = meRes.data || profileRes.data;
     if (!userData) {
       await AsyncStorage.multiRemove(['access_token', 'refresh_token']);
+      await clearTokens();
       return { success: false, error: 'Failed to load user profile.' };
     }
 
@@ -87,6 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         : role === 'doctor' || role === 'nurse' || role === 'front_desk' || role === 'pharmacy' || role === 'facilities' || role === 'emergency' || role === 'staff';
     if (!role || !roleMatchesZone) {
       await AsyncStorage.multiRemove(['access_token', 'refresh_token']);
+      await clearTokens();
       return {
         success: false,
         error: 'This account does not match the selected sign-in type. Choose the correct account type and try again.',
@@ -115,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     setUser(null);
     await AsyncStorage.multiRemove(['auth_user', 'access_token', 'refresh_token']);
+    await clearTokens();
   };
 
   const updateUser = async (updates: Partial<AuthUser>) => {

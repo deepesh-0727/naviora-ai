@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { getAccessToken, getRefreshToken, saveAccessToken } from './secure_store';
+import { getAccessToken, getRefreshToken, saveTokens } from './secure_store';
 import type { Role } from '../types/roles';
 import { CONFIG } from '../../../config';
 
@@ -38,8 +39,19 @@ apiClient.interceptors.request.use(async (config) => {
   } catch (error) {
     console.log('SECURE STORE TOKEN READ FAILED:', error instanceof Error ? error.message : error);
   }
+  let tokenSource = token ? 'SecureStore' : 'none';
   if (!token) {
-    console.log('WARNING: NO TOKEN FOUND IN SECURE STORE');
+    try {
+      token = await AsyncStorage.getItem('access_token');
+      if (token) tokenSource = 'AsyncStorage fallback';
+    } catch (error) {
+      console.log('ASYNC STORAGE TOKEN READ FAILED:', error instanceof Error ? error.message : error);
+    }
+  }
+  if (!token) {
+    console.log('NO TOKEN FOUND IN EITHER STORE');
+  } else {
+    console.log('TOKEN SOURCE:', tokenSource);
   }
   if (token) {
     config.headers = config.headers ?? {};
@@ -69,14 +81,37 @@ apiClient.interceptors.response.use(
     originalRequest._retry = true;
     if (!refreshInFlight) {
       refreshInFlight = (async () => {
-        const refreshToken = await getRefreshToken();
-        if (!refreshToken) return null;
+        let refreshToken: string | null = null;
+        try {
+          refreshToken = await getRefreshToken();
+        } catch (storageError) {
+          console.log('SECURESTORE REFRESH TOKEN READ FAILED:', storageError instanceof Error ? storageError.message : storageError);
+        }
+        let storedRefreshToken = refreshToken;
+        if (!storedRefreshToken) {
+          try {
+            storedRefreshToken = await AsyncStorage.getItem('refresh_token');
+          } catch (storageError) {
+            console.log('ASYNC STORAGE REFRESH TOKEN READ FAILED:', storageError instanceof Error ? storageError.message : storageError);
+          }
+        }
+        if (!storedRefreshToken) return null;
 
         try {
-          const response = await axios.post(`${CONFIG.API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
+          const response = await axios.post(`${CONFIG.API_BASE_URL}/auth/refresh`, { refresh_token: storedRefreshToken });
           const accessToken = response.data?.access_token ?? response.data?.token;
           if (typeof accessToken !== 'string' || accessToken.length === 0) return null;
-          await saveAccessToken(accessToken);
+          const newRefreshToken = response.data?.refresh_token;
+          try {
+            await saveTokens(accessToken, newRefreshToken);
+          } catch (storageError) {
+            console.log('SECURESTORE REFRESH SAVE FAILED:', storageError instanceof Error ? storageError.message : storageError);
+          }
+          const tokenEntries: [string, string][] = [['access_token', accessToken]];
+          if (typeof newRefreshToken === 'string' && newRefreshToken.length > 0) {
+            tokenEntries.push(['refresh_token', newRefreshToken]);
+          }
+          await AsyncStorage.multiSet(tokenEntries);
           return accessToken;
         } catch {
           return null;
