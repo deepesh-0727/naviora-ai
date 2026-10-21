@@ -131,7 +131,8 @@ export default function VoiceAssistantScreen() {
       console.error('Speech recognition error:', event.error, event.message);
       if (event.error !== 'aborted') {
         if (event.error === 'not-allowed') setPermission(false);
-        if (event.error === 'no-speech') {
+        if (event.error === 'no-speech' || event.error === 'language-not-supported') {
+          try { ExpoSpeechRecognitionModule.stop(); } catch { /* Recognition has already failed or stopped. */ }
           setScreenError('Voice unavailable, please type below.');
           setTimeout(() => setScreenError(null), 3500);
           return;
@@ -140,10 +141,6 @@ export default function VoiceAssistantScreen() {
           ? 'Microphone or speech recognition permission was denied. Open Settings to allow access.'
           : event.error === 'service-not-allowed'
             ? 'No speech recognition service is available. Enable a speech service on this device and try again.'
-            : event.error === 'language-not-supported'
-              ? "English speech recognition isn't available. Enable Speech Services by Google and download the English (US) language pack in your phone's voice input settings."
-              : event.error === 'no-speech'
-                ? "I didn't hear anything. Check that Speech Services by Google is enabled and English (US) is installed, then tap the mic and speak clearly."
             : `Speech recognition failed (${event.error}). Please try again.`);
       }
     });
@@ -180,7 +177,10 @@ export default function VoiceAssistantScreen() {
       });
       if (additions.length) setMessages((items) => [...items, ...additions]);
       setStatus('idle');
-      if (received.response_text) Speech.speak(received.response_text);
+      if (received.response_text) {
+        Speech.stop();
+        Speech.speak(received.response_text, { language: 'en-US', pitch: 1.0, rate: 0.85 });
+      }
     } catch (cause: unknown) {
       const code = (cause as RequestError).response?.status;
       setStatus('idle');
