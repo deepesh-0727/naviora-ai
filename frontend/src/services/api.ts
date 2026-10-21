@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CONFIG } from '../../config';
+import { expireAuthSession } from '../shared/services/auth_events';
 
 export interface APIResponse<T> {
   data?: T;
@@ -93,6 +94,7 @@ async function request<T>(
     } else {
       console.log('API ERROR:', `${method} ${url} returned HTTP ${status}`);
       console.log('API ERROR DATA:', data);
+      if (status === 401 && token) await expireAuthSession();
       return {
         error: getErrorMessage(data, 'An error occurred while calling the service'),
         status,
@@ -119,6 +121,7 @@ async function requestForm<T>(endpoint: string, body: Record<string, string>): P
       body: new URLSearchParams(body).toString(),
     });
     const data = await response.json().catch(() => null);
+    if (response.status === 401 && token) await expireAuthSession();
     return response.ok
       ? { data, status: response.status }
       : { error: getErrorMessage(data, 'Request failed'), status: response.status };

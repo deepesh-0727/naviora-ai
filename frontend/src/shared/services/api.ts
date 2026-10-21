@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { expireAuthSession } from './auth_events';
 import { getAccessToken, getRefreshToken, normalizeStoredToken, saveTokens } from './secure_store';
 import type { Role } from '../types/roles';
 import { CONFIG } from '../../../config';
@@ -79,7 +80,13 @@ apiClient.interceptors.response.use(
       console.log('API ERROR DATA:', error.response.data);
     }
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
-    if (error.response?.status !== 401 || !originalRequest || originalRequest._retry) {
+    if (error.response?.status !== 401 || !originalRequest) {
+      return Promise.reject(error);
+    }
+    const authorization = originalRequest.headers?.Authorization;
+    const hadAuthorization = typeof authorization === 'string' ? authorization.length > 0 : Boolean(authorization);
+    if (originalRequest._retry) {
+      if (hadAuthorization) await expireAuthSession();
       return Promise.reject(error);
     }
 
@@ -129,6 +136,7 @@ apiClient.interceptors.response.use(
 
     const token = await refreshInFlight;
     if (!token) {
+      if (hadAuthorization) await expireAuthSession();
       return Promise.reject(error);
     }
 

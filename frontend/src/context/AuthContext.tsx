@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '../services/api';
+import { subscribeToAuthExpired } from '../shared/services/auth_events';
 import { clearTokens, normalizeStoredToken, saveTokens } from '../shared/services/secure_store';
 
 export type UserRole = 'patient' | 'doctor' | 'nurse' | 'front_desk' | 'pharmacy' | 'facilities' | 'emergency' | 'staff' | 'admin' | 'super_admin';
@@ -45,6 +46,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }).catch(() => setIsLoading(false));
   }, []);
+
+  useEffect(() => subscribeToAuthExpired(() => setUser(null)), []);
 
   const loginWithCredentials = async (
     identifier: string,

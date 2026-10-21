@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
+import { subscribeToAuthExpired } from '../services/auth_events';
 import { getAccessToken, getRefreshToken, getRole, clearTokens, saveRole, saveTokens } from '../services/secure_store';
 import type { AuthTokens, Role, RoleUser, Zone } from '../types/roles';
 import { zoneForRole } from '../types/roles';
@@ -66,6 +67,12 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
 
     hydrate();
   }, []);
+
+  useEffect(() => subscribeToAuthExpired(() => {
+    setRole(null);
+    setUser(null);
+    setTokens({ accessToken: null, refreshToken: null });
+  }), []);
 
   const login = async (nextRole: Role, nextTokens: AuthTokens, nextUser: RoleUser) => {
     await saveRole(nextRole);
