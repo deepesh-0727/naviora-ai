@@ -5,6 +5,7 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -31,6 +32,7 @@ export default function LoginScreen({ navigation, route }: any) {
   const zoneTitle = zone === 'patient' ? 'Patient' : zone === 'staff' ? 'Healthcare Staff' : 'Administrator';
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -94,14 +96,31 @@ export default function LoginScreen({ navigation, route }: any) {
                   autoCapitalize="none"
                   placeholder="you@example.com or +91 98765 43210"
                 />
-                <FloatingLabelInput
-                  label="Password"
-                  value={password}
-                  onChangeText={setPassword}
-                  icon="lock-closed-outline"
-                  secureTextEntry
-                  placeholder="••••••••"
-                />
+                <View style={styles.passwordField}>
+                  <NavioraText type="label" color="secondary" style={styles.passwordLabel}>Password</NavioraText>
+                  <View style={[styles.passwordInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.sm }]}>
+                    <Ionicons name="lock-closed-outline" size={18} color={theme.colors.text.secondary} style={styles.passwordIcon} />
+                    <TextInput
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPassword}
+                      placeholder="••••••••"
+                      placeholderTextColor={theme.colors.text.secondary}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      accessibilityLabel="Password"
+                      style={[styles.passwordTextInput, { color: theme.colors.text.primary }]}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword(visible => !visible)}
+                      accessibilityRole="button"
+                      accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                      style={styles.passwordToggle}
+                    >
+                      <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={theme.colors.text.secondary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
 
                 <TouchableOpacity style={styles.forgotBtn} onPress={() => navigation.navigate('ForgotPassword')}>
                   <NavioraText type="label" color="primary">Forgot Password?</NavioraText>
@@ -162,6 +181,12 @@ const styles = StyleSheet.create({
   welcomeText: { marginTop: 8, marginBottom: 4 },
   formCard: { paddingVertical: 24, marginBottom: 16 },
   formHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  passwordField: { marginBottom: 16 },
+  passwordLabel: { marginBottom: 8 },
+  passwordInput: { minHeight: 52, borderWidth: 1, flexDirection: 'row', alignItems: 'center' },
+  passwordIcon: { marginLeft: 14, marginRight: 10 },
+  passwordTextInput: { flex: 1, minHeight: 50, paddingVertical: 10, fontSize: 16 },
+  passwordToggle: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   forgotBtn: { alignSelf: 'flex-end', marginBottom: 24 },
   errorBox: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, marginTop: 16 },
   registerCard: { padding: 20, marginBottom: 16, alignItems: 'center' },
