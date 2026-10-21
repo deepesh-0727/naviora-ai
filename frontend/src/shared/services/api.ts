@@ -282,6 +282,15 @@ export const api = {
         form,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       ),
+    processVoiceText: (text: string, sessionId?: string) =>
+      apiClient.post<{
+        text?: string;
+        intent?: string;
+        entities?: Record<string, unknown>;
+        response_text?: string;
+        fallback_used?: boolean;
+        fallback_reason?: string | null;
+      }>(buildApiUrl('patient', '/voice/process-text'), { text, session_id: sessionId }, { params: { return_audio: false } }),
     getSettings: () => apiClient.get<Record<string, unknown>>(buildApiUrl('patient', '/settings')),
     updateSettings: (payload: Record<string, unknown>) =>
       apiClient.put<Record<string, unknown>>(buildApiUrl('patient', '/settings'), payload),

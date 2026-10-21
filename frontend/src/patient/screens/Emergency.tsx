@@ -7,7 +7,7 @@ import { websocketClient } from '../../shared/services/websocket';
 import { BackendNotAvailable, Card, ErrorState, InfoRow, ScreenContainer, SectionHeader } from '../../shared/components';
 import { colors } from '../../shared/theme/colors';
 
-type EmergencyEvent = { id?: number; status?: string };
+type EmergencyEvent = { event?: string; data?: { id?: number; emergency_id?: number; status?: string; responder_name?: string; eta_minutes?: number | null } };
 type RequestError = { response?: { status?: number } };
 
 export default function EmergencyScreen() {
@@ -17,6 +17,8 @@ export default function EmergencyScreen() {
   const [caseId, setCaseId] = useState<number | null>(null);
   const [timeline, setTimeline] = useState<string[]>([]);
   const [responseMessage, setResponseMessage] = useState<string | null>(null);
+  const [responderName, setResponderName] = useState<string | null>(null);
+  const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -29,8 +31,12 @@ export default function EmergencyScreen() {
   useEffect(() => {
     void websocketClient.connect();
     const subscribe = (event: string, label: string) => websocketClient.subscribe(event, (payload: unknown) => {
-      const data = payload as EmergencyEvent;
-      if (caseId !== null && data.id !== undefined && data.id !== caseId) return;
+      const eventPayload = payload as EmergencyEvent;
+      const data = eventPayload.data ?? eventPayload as unknown as NonNullable<EmergencyEvent['data']>;
+      const eventCaseId = data.emergency_id ?? data.id;
+      if (caseId === null || eventCaseId !== caseId) return;
+      if (data.responder_name) setResponderName(data.responder_name);
+      if (typeof data.eta_minutes === 'number') setEtaMinutes(data.eta_minutes);
       setTimeline((steps) => steps.includes(label) ? steps : [...steps, label]);
     });
     const unsubs = [subscribe('emergency_ack', 'Emergency signal acknowledged'), subscribe('emergency_en_route', 'Help is on the way'), subscribe('emergency_arrived', 'Responders have arrived')];
@@ -45,7 +51,7 @@ export default function EmergencyScreen() {
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const location = `Lat: ${position.coords.latitude.toFixed(3)}, Lng: ${position.coords.longitude.toFixed(3)}`;
       const response = await api.patient.triggerEmergency({ location, description: 'Emergency triggered via app' });
-      setCaseId(response.data.id); setTimeline(['Emergency signal logged']); setResponseMessage(response.data.message ?? null); triggeredAt.current = Date.now(); setCancelAvailable(true);
+      setCaseId(response.data.id); setTimeline(['Emergency signal logged']); setResponderName(null); setEtaMinutes(null); setResponseMessage(response.data.message ?? null); triggeredAt.current = Date.now(); setCancelAvailable(true);
       cancelTimer.current = setTimeout(() => { triggeredAt.current = null; setCancelAvailable(false); }, 30000);
     } catch (cause: unknown) {
       const code = (cause as RequestError).response?.status;
@@ -78,8 +84,8 @@ export default function EmergencyScreen() {
     {error ? <ErrorState message={error} onRetry={() => setError(null)} /> : null}
     {responseMessage ? <Card><Text style={styles.warning}>{responseMessage}</Text></Card> : null}
     <Card style={styles.card}><Text style={styles.cardTitle}>Critical information</Text><InfoRow label="Name" value={user?.name} /><InfoRow label="Blood group" value={typeof user?.blood_group === 'string' ? user.blood_group : null} /><InfoRow label="Allergies" value={Array.isArray(user?.allergies) ? user.allergies.join(', ') : null} /><InfoRow label="Emergency contact" value={typeof user?.emergency_contact === 'string' ? user.emergency_contact : null} /></Card>
-    {timeline.length ? <Card style={styles.card}><Text style={styles.cardTitle}>Response status</Text>{timeline.map((step, index) => <Text style={styles.step} key={`${step}-${index}`}>●  {step}</Text>)}{cancelAvailable ? <TouchableOpacity onPress={() => void cancelEmergency()} style={styles.cancel}><Text style={styles.cancelText}>Cancel request</Text></TouchableOpacity> : null}</Card> : null}
+    {caseId !== null ? <Card style={styles.card}><Text style={styles.cardTitle}>Live response tracking</Text><InfoRow label="Assigned responder" value={responderName ?? 'Waiting for staff assignment'} /><InfoRow label="ETA" value={etaMinutes === null ? 'Pending staff update' : `${etaMinutes} min`} />{timeline.map((step, index) => <Text style={styles.step} key={`${step}-${index}`}>●  {step}</Text>)}{cancelAvailable ? <TouchableOpacity onPress={() => void cancelEmergency()} style={styles.cancel}><Text style={styles.cancelText}>Cancel request</Text></TouchableOpacity> : null}</Card> : null}
   </ScreenContainer>;
 }
 
-const styles = StyleSheet.create({ explainer: { color: colors.textMuted, textAlign: 'center', marginBottom: 12 }, sosArea: { height: 185, alignItems: 'center', justifyContent: 'center' }, ring: { position: 'absolute', width: 120, height: 120, borderRadius: 60, backgroundColor: colors.danger }, sos: { width: 112, height: 112, borderRadius: 56, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', elevation: 5 }, sosText: { color: '#fff', fontSize: 26, fontWeight: '800' }, card: { marginTop: 14 }, cardTitle: { color: colors.text, fontWeight: '700', fontSize: 16, marginBottom: 6 }, step: { paddingVertical: 8, color: colors.text }, cancel: { marginTop: 12, alignSelf: 'center', padding: 10 }, cancelText: { color: colors.danger, fontWeight: '700' }, warning: { color: colors.text }, link: { color: colors.primary, paddingTop: 10, fontWeight: '700' } });
+const styles = StyleSheet.create({ explainer: { color: colors.textMuted, textAlign: 'center', marginBottom: 12 }, sosArea: { height: 185, alignItems: 'center', justifyContent: 'center' }, ring: { position: 'absolute', width: 120, height: 120, borderRadius: 60, backgroundColor: colors.dangerLight }, sos: { width: 112, height: 112, borderRadius: 56, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', elevation: 5 }, sosText: { color: colors.white, fontSize: 26, fontWeight: '800' }, card: { marginTop: 14 }, cardTitle: { color: colors.text, fontWeight: '700', fontSize: 16, marginBottom: 6 }, step: { paddingVertical: 8, color: colors.text }, cancel: { marginTop: 12, alignSelf: 'center', padding: 10 }, cancelText: { color: colors.danger, fontWeight: '700' }, warning: { color: colors.text }, link: { color: colors.primary, paddingTop: 10, fontWeight: '700' } });

@@ -10,7 +10,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
+import { addSpeechRecognitionListener, ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../../shared/services/api';
 import {
@@ -72,12 +73,13 @@ export default function VoiceAssistantScreen() {
   const [permission, setPermission] = useState<boolean | null>(null);
   const [status, setStatus] = useState<ScreenStatus>('idle');
   const [messages, setMessages] = useState<Message[]>([]);
-  const [lastRecordingUri, setLastRecordingUri] = useState<string | null>(null);
   const [screenError, setScreenError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
-  const recordingRef = useRef<Audio.Recording | null>(null);
   const pressedRef = useRef(false);
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const recognitionActiveRef = useRef(false);
+  const stopRequestedRef = useRef(false);
+  const transcriptRef = useRef('');
+  const submitTranscriptRef = useRef<(transcript: string) => void>(() => undefined);
   const listRef = useRef<FlatList<Message>>(null);
   const nextMessageId = useRef(0);
   const pulse = useRef(new Animated.Value(1)).current;
@@ -103,11 +105,39 @@ export default function VoiceAssistantScreen() {
     if (messages.length) listRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
-  useEffect(() => () => {
-    const activeRecording = recordingRef.current;
-    recordingRef.current = null;
-    if (activeRecording) void activeRecording.stopAndUnloadAsync().catch(() => undefined);
-    if (soundRef.current) void soundRef.current.unloadAsync().catch(() => undefined);
+  useEffect(() => {
+    const resultSubscription = addSpeechRecognitionListener('result', (event) => {
+      const transcript = event.results[0]?.transcript?.trim();
+      if (transcript && event.isFinal) transcriptRef.current = transcript;
+    });
+    const endSubscription = addSpeechRecognitionListener('end', () => {
+      recognitionActiveRef.current = false;
+      if (!stopRequestedRef.current) return;
+      stopRequestedRef.current = false;
+      const transcript = transcriptRef.current.trim();
+      if (transcript) submitTranscriptRef.current(transcript);
+      else {
+        setStatus('idle');
+        addErrorMessage('I could not hear that clearly. Please try again.');
+      }
+    });
+    const errorSubscription = addSpeechRecognitionListener('error', (event) => {
+      recognitionActiveRef.current = false;
+      stopRequestedRef.current = false;
+      setStatus('idle');
+      if (event.error !== 'aborted') {
+        addErrorMessage(event.error === 'not-allowed'
+          ? 'Microphone or speech recognition permission was denied.'
+          : 'Speech recognition failed. Please try again.');
+      }
+    });
+    return () => {
+      resultSubscription.remove();
+      endSubscription.remove();
+      errorSubscription.remove();
+      try { ExpoSpeechRecognitionModule.abort(); } catch { /* Native module may be unavailable in preview. */ }
+      Speech.stop();
+    };
   }, []);
 
   const addErrorMessage = (message: string) => {
@@ -118,129 +148,83 @@ export default function VoiceAssistantScreen() {
     }]);
   };
 
-  const playResponse = async (url?: string | null) => {
-    if (!url) return;
-    try {
-      if (soundRef.current) await soundRef.current.unloadAsync();
-      const playback = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true });
-      soundRef.current = playback.sound;
-    } catch {
-      setScreenError('The response was received, but its audio could not be played.');
-    }
-  };
-
-  const uploadRecording = async (uri: string) => {
+  const submitTranscript = async (transcript: string) => {
     setStatus('processing');
     setScreenError(null);
     try {
-      const form = new FormData();
-      const extension = uri.split('?')[0].split('.').pop()?.toLowerCase() ?? 'm4a';
-      const supportedExtensions = ['m4a', 'mp4', 'aac', '3gp', 'wav', 'webm'];
-      if (!supportedExtensions.includes(extension)) {
-        setStatus('idle');
-        addErrorMessage('This audio format is not supported. Please record a new voice request.');
-        return;
-      }
-      const audioType = extension === 'webm'
-        ? 'audio/webm'
-        : extension === '3gp'
-          ? 'audio/3gpp'
-          : extension === 'wav'
-            ? 'audio/wav'
-            : 'audio/mp4';
-      form.append('audio', {
-        uri,
-        name: `voice.${extension}`,
-        type: audioType,
-      } as unknown as Blob);
-
-      const { data } = await api.patient.processVoice(form);
+      const { data } = await api.patient.processVoiceText(transcript);
       const received = data as VoiceResponse;
-      const additions: Message[] = [];
-      if (received.text) {
-        additions.push({
-          id: `user-${++nextMessageId.current}`,
-          role: 'user',
-          text: received.text,
-        });
-      }
-      if (received.response_text) {
-        additions.push({
-          id: `assistant-${++nextMessageId.current}`,
-          role: 'assistant',
-          text: received.response_text,
-          fallbackUsed: received.fallback_used === true,
-        });
-      }
+      const additions: Message[] = [{ id: `user-${++nextMessageId.current}`, role: 'user', text: received.text || transcript }];
+      if (received.response_text) additions.push({
+        id: `assistant-${++nextMessageId.current}`,
+        role: 'assistant',
+        text: received.response_text,
+        fallbackUsed: received.fallback_used === true,
+      });
       if (additions.length) setMessages((items) => [...items, ...additions]);
       setStatus('idle');
-      await playResponse(received.response_audio_url);
+      if (received.response_text) Speech.speak(received.response_text);
     } catch (cause: unknown) {
       const code = (cause as RequestError).response?.status;
       setStatus('idle');
       if (code === 404 || code === 501) {
         setUnavailable(true);
-      } else if (code === 413) {
-        addErrorMessage('This recording is too large to upload. Please record a shorter request.');
-      } else if (code === 415 || code === 422) {
-        addErrorMessage(apiErrorMessage(cause, 'The server could not read this audio format. Please record a new voice request.'));
       } else {
         addErrorMessage(apiErrorMessage(cause, 'Something went wrong. Tap to retry.'));
       }
     }
   };
+  submitTranscriptRef.current = (transcript) => { void submitTranscript(transcript); };
 
-  const startRecording = async () => {
+  const startListening = async () => {
     setScreenError(null);
     try {
       let hasPermission = permission === true;
       if (!hasPermission) {
-        const result = await Audio.requestPermissionsAsync();
-        hasPermission = result.status === 'granted';
+        const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        hasPermission = result.granted;
         setPermission(hasPermission);
       }
       if (!hasPermission) return;
-
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      recordingRef.current = result.recording;
+      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+        setScreenError('Speech recognition is not available on this device.');
+        return;
+      }
+      transcriptRef.current = '';
+      stopRequestedRef.current = false;
+      ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, maxAlternatives: 1, continuous: false });
+      recognitionActiveRef.current = true;
       setStatus('recording');
-      if (!pressedRef.current) void stopRecording(result.recording);
+      if (!pressedRef.current) stopListening();
     } catch {
+      recognitionActiveRef.current = false;
       setStatus('idle');
-      setScreenError('Could not start recording. Check microphone access and try again.');
+      setScreenError('Could not start speech recognition. Check microphone access and try again.');
     }
   };
 
-  const stopRecording = async (recording = recordingRef.current) => {
-    if (!recording || status === 'processing') return;
-    recordingRef.current = null;
+  const stopListening = () => {
+    if (!recognitionActiveRef.current) return;
+    recognitionActiveRef.current = false;
+    stopRequestedRef.current = true;
     setStatus('processing');
-    try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      if (!uri) throw new Error('Recording file is unavailable');
-      setLastRecordingUri(uri);
-      await uploadRecording(uri);
-    } catch {
+    try { ExpoSpeechRecognitionModule.stop(); }
+    catch {
+      stopRequestedRef.current = false;
       setStatus('idle');
-      addErrorMessage('Something went wrong. Tap to retry.');
+      addErrorMessage('Could not stop speech recognition. Please try again.');
     }
-  };
-
-  const retryLastRecording = () => {
-    if (lastRecordingUri) void uploadRecording(lastRecordingUri);
   };
 
   const handlePressIn = () => {
     if (status !== 'idle') return;
     pressedRef.current = true;
-    void startRecording();
+    void startListening();
   };
 
   const handlePressOut = () => {
     pressedRef.current = false;
-    if (recordingRef.current) void stopRecording(recordingRef.current);
+    stopListening();
   };
 
   if (unavailable) {
@@ -285,9 +269,6 @@ export default function VoiceAssistantScreen() {
               <Text style={item.role === 'user' ? styles.userText : item.role === 'error' ? styles.errorText : styles.agentText}>
                 {item.text}
               </Text>
-              {item.role === 'error' && lastRecordingUri
-                ? <Button title="Retry" variant="secondary" onPress={retryLastRecording} style={styles.retryButton} />
-                : null}
             </View>
           )}
         />
@@ -311,7 +292,7 @@ export default function VoiceAssistantScreen() {
           </TouchableOpacity>
         </Animated.View>
         <Text style={styles.hint}>
-          {status === 'recording' ? 'Recording… release to send' : status === 'processing' ? 'Uploading and processing…' : 'Hold to speak'}
+          {status === 'recording' ? 'Listening… release to send' : status === 'processing' ? 'Processing your request…' : 'Hold to speak'}
         </Text>
       </View>
     </ScreenContainer>

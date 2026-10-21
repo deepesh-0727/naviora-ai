@@ -40,6 +40,13 @@
         }
       ],
       [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Naviora AI to access the microphone for voice commands.",
+          "speechRecognitionPermission": "Allow Naviora AI to recognize your voice requests."
+        }
+      ],
+      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Naviora AI to use your location for emergency SOS."

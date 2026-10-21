@@ -3,8 +3,11 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 import sentry_sdk
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.models.emergency import EmergencyCase
+from app.models.doctor import Doctor
+from app.models.user import User
 from app.services.ws_manager import ws_manager
 from app.agents.specialized.emergency_agent import EmergencyAgent
 
@@ -99,7 +102,14 @@ class EmergencyService:
         existing_staff_id = assigned_staff.get("primary_staff_id")
         if existing_staff_id is not None and existing_staff_id != staff_id:
             raise ValueError("This emergency is already assigned to another staff member.")
+        responder = await db.get(User, staff_id)
+        responder_name = responder.role.replace("_", " ").title() if responder else "Hospital responder"
+        if responder and responder.role == "doctor":
+            doctor = await db.scalar(select(Doctor).where(Doctor.user_id == responder.id))
+            if doctor:
+                responder_name = f"Dr. {doctor.first_name} {doctor.last_name}".strip()
         assigned_staff["primary_staff_id"] = staff_id
+        assigned_staff["responder_name"] = responder_name
         emergency.assigned_staff = assigned_staff
         emergency.status = "staff_assigned"
         await db.commit()
@@ -108,6 +118,7 @@ class EmergencyService:
         event_data = {
             "emergency_id": emergency.id,
             "staff_id": staff_id,
+            "responder_name": responder_name,
             "location": emergency.location_desc,
         }
         await ws_manager.broadcast_event("emergency", "emergency_ack", event_data)

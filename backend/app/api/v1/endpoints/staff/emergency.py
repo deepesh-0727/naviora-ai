@@ -11,6 +11,7 @@ from app.models.emergency import EmergencyCase
 from app.models.operations import EmergencyMessage
 from app.models.patient import Patient
 from app.models.user import User
+from app.models.doctor import Doctor
 from app.services.ws_manager import ws_manager
 
 router = APIRouter()
@@ -102,12 +103,17 @@ async def assign_responder(
         raise HTTPException(status_code=404, detail="Emergency incident not found.")
     if responder is None or not responder.is_active or responder.role not in RESPONDER_ROLES:
         raise HTTPException(status_code=404, detail="Active emergency responder not found.")
-    case.assigned_staff = {"user_id": responder.id, "role": responder.role}
+    responder_name = responder.role.replace("_", " ").title()
+    if responder.role == "doctor":
+        doctor = await db.scalar(select(Doctor).where(Doctor.user_id == responder.id))
+        if doctor:
+            responder_name = f"Dr. {doctor.first_name} {doctor.last_name}".strip()
+    case.assigned_staff = {"user_id": responder.id, "role": responder.role, "responder_name": responder_name}
     case.status = "staff_assigned"
     case.updated_at = datetime.utcnow()
     case.acknowledged_at = case.acknowledged_at or case.updated_at
     await db.commit()
-    payload_out = {"emergency_id": case.id, "patient_id": case.patient_id, "responder_id": responder.id, "status": case.status}
+    payload_out = {"emergency_id": case.id, "patient_id": case.patient_id, "responder_id": responder.id, "responder_name": responder_name, "status": case.status}
     await ws_manager.broadcast_event("emergency", "emergency_ack", payload_out)
     if case.patient_id is not None:
         await ws_manager.broadcast_event(f"patient:{case.patient_id}", "emergency_ack", payload_out)
