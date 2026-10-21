@@ -6,6 +6,7 @@ from app.db.base_class import Base  # noqa
 from app.models.user import User  # noqa
 from app.models.patient import Patient  # noqa
 from app.models.doctor import Doctor, Department  # noqa
+from app.models.nurse import NurseProfile  # noqa
 from app.models.appointment import Appointment  # noqa
 from app.models.emergency import EmergencyCase  # noqa
 from app.models.communication import Notification, ConversationHistory  # noqa

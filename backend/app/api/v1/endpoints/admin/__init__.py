@@ -10,12 +10,14 @@ from app.api.v1.endpoints.admin import (
     pilot_metrics,
     resources,
     settings,
+    staff,
     users,
 )
 
 router = APIRouter()
 router.include_router(dashboard.router, prefix="/dashboard", tags=["admin-dashboard"])
 router.include_router(users.router, prefix="/users", tags=["admin-users"])
+router.include_router(staff.router, prefix="/staff", tags=["admin-staff"])
 router.include_router(departments.router, prefix="/departments", tags=["admin-departments"])
 router.include_router(resources.router, prefix="/resources", tags=["admin-resources"])
 router.include_router(analytics.router, prefix="/analytics", tags=["admin-analytics"])

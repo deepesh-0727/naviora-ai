@@ -7,6 +7,7 @@ from app.api import deps
 from app.core.security import get_password_hash
 from app.db.session import get_db
 from app.models.doctor import Department, Doctor
+from app.models.nurse import NurseProfile
 from app.models.operations import RegisteredDevice
 from app.models.user import User
 
@@ -49,7 +50,7 @@ async def list_users(
     if role:
         query = query.where(User.role == role)
     result = await db.execute(query)
-    return {"items": [{"id": user.id, "email": user.email, "phone": user.phone, "role": user.role, "is_active": user.is_active, "created_at": user.created_at} for user in result.scalars().all()]}
+    return {"items": [{"id": user.id, "first_name": user.first_name, "last_name": user.last_name, "email": user.email, "phone": user.phone, "role": user.role, "is_active": user.is_active, "created_at": user.created_at} for user in result.scalars().all()]}
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -62,10 +63,12 @@ async def create_user(
         raise HTTPException(status_code=422, detail="Unsupported role.")
     if payload.role == "doctor" and not all([payload.first_name, payload.last_name, payload.specialization, payload.department_id, payload.license_number, payload.years_of_experience is not None]):
         raise HTTPException(status_code=422, detail="Doctor accounts require profile, department, and license fields.")
+    if payload.role == "nurse" and not all([payload.first_name, payload.last_name]):
+        raise HTTPException(status_code=422, detail="Nurse accounts require first and last names.")
     existing = await db.scalar(select(User.id).where((User.email == str(payload.email)) | (User.phone == payload.phone)))
     if existing is not None:
         raise HTTPException(status_code=409, detail="Email or phone number is already registered.")
-    user = User(email=str(payload.email), phone=payload.phone, password_hash=get_password_hash(payload.password), role=payload.role, is_active=True, is_verified=True)
+    user = User(email=str(payload.email), phone=payload.phone, password_hash=get_password_hash(payload.password), role=payload.role, first_name=payload.first_name, last_name=payload.last_name, is_active=True, is_verified=True)
     db.add(user)
     await db.flush()
     if payload.role == "doctor":
@@ -82,6 +85,10 @@ async def create_user(
             years_of_experience=payload.years_of_experience or 0,
         )
         db.add(doctor)
+    elif payload.role == "nurse":
+        if payload.department_id is not None and await db.get(Department, payload.department_id) is None:
+            raise HTTPException(status_code=404, detail="Department not found.")
+        db.add(NurseProfile(user_id=user.id, first_name=payload.first_name or "", last_name=payload.last_name or "", department_id=payload.department_id))
     await db.commit()
     await db.refresh(user)
     return {"id": user.id, "email": user.email, "phone": user.phone, "role": user.role, "is_active": user.is_active}

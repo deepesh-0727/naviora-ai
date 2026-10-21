@@ -6,6 +6,7 @@ Aggregates all 15 clinical and operational database models.
 from .user import User
 from .patient import Patient
 from .doctor import Doctor, Department
+from .nurse import NurseProfile
 from .appointment import Appointment
 from .emergency import EmergencyCase
 from .communication import Notification, ConversationHistory
@@ -44,6 +45,7 @@ __all__ = [
     "User",
     "Patient",
     "Doctor",
+    "NurseProfile",
     "Department",
     "Appointment",
     "EmergencyCase",

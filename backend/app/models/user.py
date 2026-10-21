@@ -1,5 +1,5 @@
 import datetime
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 from sqlalchemy import String, Integer, Boolean, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -8,6 +8,7 @@ from app.db.base_class import Base
 if TYPE_CHECKING:
     from .patient import Patient
     from .doctor import Doctor
+    from .nurse import NurseProfile
 
 class User(Base):
     __tablename__ = "users"
@@ -16,6 +17,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(20), default="patient") # patient, doctor, staff, admin
+    first_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    last_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, nullable=True)
@@ -27,3 +30,4 @@ class User(Base):
     # Relationships
     patient_profile: Mapped[Optional["Patient"]] = relationship("Patient", back_populates="user", uselist=False)
     doctor_profile: Mapped[Optional["Doctor"]] = relationship("Doctor", back_populates="user", uselist=False)
+    nurse_profile: Mapped[Optional["NurseProfile"]] = relationship("NurseProfile", back_populates="user", uselist=False)
