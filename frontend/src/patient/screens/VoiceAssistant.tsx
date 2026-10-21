@@ -75,9 +75,9 @@ export default function VoiceAssistantScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [screenError, setScreenError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
-  const pressedRef = useRef(false);
   const recognitionActiveRef = useRef(false);
   const stopRequestedRef = useRef(false);
+  const submittedRef = useRef(false);
   const transcriptRef = useRef('');
   const submitTranscriptRef = useRef<(transcript: string) => void>(() => undefined);
   const listRef = useRef<FlatList<Message>>(null);
@@ -112,18 +112,19 @@ export default function VoiceAssistantScreen() {
     });
     const endSubscription = addSpeechRecognitionListener('end', () => {
       recognitionActiveRef.current = false;
-      if (!stopRequestedRef.current) return;
       stopRequestedRef.current = false;
       const transcript = transcriptRef.current.trim();
-      if (transcript) submitTranscriptRef.current(transcript);
-      else {
+      if (transcript && !submittedRef.current) {
+        submittedRef.current = true;
+        submitTranscriptRef.current(transcript);
+      } else if (!transcript) {
         setStatus('idle');
-        addErrorMessage('I could not hear that clearly. Please try again.');
       }
     });
     const errorSubscription = addSpeechRecognitionListener('error', (event) => {
       recognitionActiveRef.current = false;
       stopRequestedRef.current = false;
+      submittedRef.current = true;
       setStatus('idle');
       console.error('Speech recognition error:', event.error, event.message);
       if (event.error !== 'aborted') {
@@ -196,10 +197,20 @@ export default function VoiceAssistantScreen() {
       }
       transcriptRef.current = '';
       stopRequestedRef.current = false;
-      ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, maxAlternatives: 1, continuous: false });
+      submittedRef.current = false;
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        maxAlternatives: 1,
+        continuous: false,
+        addsPunctuation: true,
+        androidIntentOptions: {
+          EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 5000,
+          EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 5000,
+        },
+      });
       recognitionActiveRef.current = true;
       setStatus('recording');
-      if (!pressedRef.current) stopListening();
     } catch (cause: unknown) {
       recognitionActiveRef.current = false;
       setStatus('idle');
@@ -223,15 +234,12 @@ export default function VoiceAssistantScreen() {
     }
   };
 
-  const handlePressIn = () => {
-    if (status !== 'idle') return;
-    pressedRef.current = true;
-    void startListening();
-  };
-
-  const handlePressOut = () => {
-    pressedRef.current = false;
-    stopListening();
+  const toggleListening = () => {
+    if (status === 'recording') {
+      stopListening();
+    } else if (status === 'idle') {
+      void startListening();
+    }
   };
 
   if (unavailable) {
@@ -285,21 +293,20 @@ export default function VoiceAssistantScreen() {
 
       <View style={styles.controls}>
         {status === 'processing' ? <ActivityIndicator size="large" color={colors.primary} style={styles.spinner} /> : null}
-        <View style={styles.waveform} accessibilityLabel="Audio waveform"><View style={styles.waveBar} /><View style={styles.waveBarTall} /><View style={styles.waveBar} /><View style={styles.waveBarTall} /><View style={styles.waveBar} /><View style={styles.waveBarTall} /><View style={styles.waveBar} /><View style={styles.waveBarTall} /><View style={styles.waveBar} /></View>
+        <View style={styles.waveform} accessibilityLabel={status === 'recording' ? 'Listening' : 'Audio waveform'}><View style={[styles.waveBar, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBarTall, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBar, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBarTall, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBar, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBarTall, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBar, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBarTall, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBar, status === 'recording' && styles.waveBarActive]} /></View>
         <Animated.View style={{ transform: [{ scale: pulse }] }}>
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel={status === 'recording' ? 'Recording. Release to send.' : 'Hold to record a voice request'}
+            accessibilityLabel={status === 'recording' ? 'Listening. Tap to stop and send.' : 'Tap to start a voice request'}
             disabled={status === 'processing'}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
+            onPress={toggleListening}
             style={[styles.mic, status === 'recording' && styles.recording]}
           >
             <Ionicons name={status === 'recording' ? 'radio-button-on' : 'mic'} size={30} color={colors.white} />
           </TouchableOpacity>
         </Animated.View>
         <Text style={styles.hint}>
-          {status === 'recording' ? 'Listening… release to send' : status === 'processing' ? 'Processing your request…' : 'Hold to speak'}
+          {status === 'recording' ? 'Listening… tap to stop and send' : status === 'processing' ? 'Processing your request…' : 'Tap to speak'}
         </Text>
       </View>
     </ScreenContainer>
@@ -337,4 +344,5 @@ const styles = StyleSheet.create({
   waveform: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 12 },
   waveBar: { height: 10, width: 4, borderRadius: 2, backgroundColor: colors.primary },
   waveBarTall: { height: 17, width: 4, borderRadius: 2, backgroundColor: colors.primary },
+  waveBarActive: { backgroundColor: colors.danger },
 });
