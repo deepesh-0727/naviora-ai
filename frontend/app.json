@@ -43,7 +43,11 @@
         "expo-speech-recognition",
         {
           "microphonePermission": "Allow Naviora AI to access the microphone for voice commands.",
-          "speechRecognitionPermission": "Allow Naviora AI to recognize your voice requests."
+          "speechRecognitionPermission": "Allow Naviora AI to recognize your voice requests.",
+          "androidSpeechServicePackages": [
+            "com.google.android.tts",
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ],
       [

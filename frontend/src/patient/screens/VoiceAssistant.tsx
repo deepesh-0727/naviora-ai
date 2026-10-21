@@ -133,8 +133,10 @@ export default function VoiceAssistantScreen() {
           ? 'Microphone or speech recognition permission was denied. Open Settings to allow access.'
           : event.error === 'service-not-allowed'
             ? 'No speech recognition service is available. Enable a speech service on this device and try again.'
-            : event.error === 'no-speech'
-              ? "I didn't hear anything. Tap the mic and speak clearly, then pause to send."
+            : event.error === 'language-not-supported'
+              ? "English speech recognition isn't available. Enable Speech Services by Google and download the English (US) language pack in your phone's voice input settings."
+              : event.error === 'no-speech'
+                ? "I didn't hear anything. Check that Speech Services by Google is enabled and English (US) is installed, then tap the mic and speak clearly."
             : `Speech recognition failed (${event.error}). Please try again.`);
       }
     });
@@ -197,6 +199,14 @@ export default function VoiceAssistantScreen() {
         setScreenError('Speech recognition is not available on this device.');
         return;
       }
+      if (Platform.OS === 'android') {
+        try {
+          console.log('Available speech recognition services:', ExpoSpeechRecognitionModule.getSpeechRecognitionServices());
+          console.log('Default speech recognition service:', ExpoSpeechRecognitionModule.getDefaultRecognitionService());
+        } catch (cause) {
+          console.warn('Could not inspect speech recognition services:', cause);
+        }
+      }
       transcriptRef.current = '';
       stopRequestedRef.current = false;
       submittedRef.current = false;
@@ -207,6 +217,7 @@ export default function VoiceAssistantScreen() {
         continuous: false,
         requiresOnDeviceRecognition: false,
         addsPunctuation: true,
+        ...(Platform.OS === 'android' ? { androidRecognitionServicePackage: 'com.google.android.tts' } : {}),
         androidIntentOptions: {
           EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 30000,
           EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 3000,
