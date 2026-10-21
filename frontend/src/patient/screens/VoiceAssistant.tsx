@@ -318,7 +318,7 @@ export default function VoiceAssistantScreen() {
           )}
         />
       ) : (
-        <View style={styles.empty}><EmptyState message="Speak or type your request" /></View>
+        <View style={styles.empty}><EmptyState message="Tap the mic to speak, or type your request below." /></View>
       )}
 
       <View style={styles.controls}>
@@ -328,7 +328,7 @@ export default function VoiceAssistantScreen() {
             value={draft}
             onChangeText={setDraft}
             onSubmitEditing={sendTypedRequest}
-            placeholder="Speak or type your request"
+            placeholder="Type your request"
             placeholderTextColor={colors.textMuted}
             returnKeyType="send"
             editable={status === 'idle'}
@@ -359,7 +359,7 @@ export default function VoiceAssistantScreen() {
           </TouchableOpacity>
         </Animated.View>
         <Text style={styles.hint}>
-          {status === 'recording' ? 'Listening… tap to stop and send' : status === 'processing' ? 'Processing your request…' : 'Speak or type your request'}
+          {status === 'recording' ? 'Listening… tap to stop and send' : status === 'processing' ? 'Processing your request…' : 'Tap the mic to speak, or type your request below.'}
         </Text>
       </View>
     </ScreenContainer>
