@@ -7,6 +7,7 @@ import {
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -72,6 +73,7 @@ function apiErrorMessage(cause: unknown, fallback: string): string {
 export default function VoiceAssistantScreen() {
   const [permission, setPermission] = useState<boolean | null>(null);
   const [status, setStatus] = useState<ScreenStatus>('idle');
+  const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [screenError, setScreenError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -129,6 +131,11 @@ export default function VoiceAssistantScreen() {
       console.error('Speech recognition error:', event.error, event.message);
       if (event.error !== 'aborted') {
         if (event.error === 'not-allowed') setPermission(false);
+        if (event.error === 'no-speech') {
+          setScreenError('Voice unavailable, please type below.');
+          setTimeout(() => setScreenError(null), 3500);
+          return;
+        }
         addErrorMessage(event.error === 'not-allowed'
           ? 'Microphone or speech recognition permission was denied. Open Settings to allow access.'
           : event.error === 'service-not-allowed'
@@ -160,10 +167,11 @@ export default function VoiceAssistantScreen() {
   const submitTranscript = async (transcript: string) => {
     setStatus('processing');
     setScreenError(null);
+    setMessages((items) => [...items, { id: `user-${++nextMessageId.current}`, role: 'user', text: transcript }]);
     try {
       const { data } = await api.patient.processVoiceText(transcript);
       const received = data as VoiceResponse;
-      const additions: Message[] = [{ id: `user-${++nextMessageId.current}`, role: 'user', text: received.text || transcript }];
+      const additions: Message[] = [];
       if (received.response_text) additions.push({
         id: `assistant-${++nextMessageId.current}`,
         role: 'assistant',
@@ -184,6 +192,13 @@ export default function VoiceAssistantScreen() {
     }
   };
   submitTranscriptRef.current = (transcript) => { void submitTranscript(transcript); };
+
+  const sendTypedRequest = () => {
+    const transcript = draft.trim();
+    if (!transcript || status !== 'idle') return;
+    setDraft('');
+    void submitTranscript(transcript);
+  };
 
   const startListening = async () => {
     setScreenError(null);
@@ -303,10 +318,33 @@ export default function VoiceAssistantScreen() {
           )}
         />
       ) : (
-        <View style={styles.empty}><EmptyState message="Hold the microphone and speak to request help." /></View>
+        <View style={styles.empty}><EmptyState message="Speak or type your request" /></View>
       )}
 
       <View style={styles.controls}>
+        <View style={styles.textEntry}>
+          <TextInput
+            accessibilityLabel="Type your request"
+            value={draft}
+            onChangeText={setDraft}
+            onSubmitEditing={sendTypedRequest}
+            placeholder="Speak or type your request"
+            placeholderTextColor={colors.textMuted}
+            returnKeyType="send"
+            editable={status === 'idle'}
+            style={styles.textInput}
+          />
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Send typed request"
+            disabled={!draft.trim() || status !== 'idle'}
+            onPress={sendTypedRequest}
+            style={[styles.sendButton, (!draft.trim() || status !== 'idle') && styles.sendButtonDisabled]}
+          >
+            <Ionicons name="send" size={18} color={colors.white} />
+            <Text style={styles.sendText}>Send</Text>
+          </TouchableOpacity>
+        </View>
         {status === 'processing' ? <ActivityIndicator size="large" color={colors.primary} style={styles.spinner} /> : null}
         <View style={styles.waveform} accessibilityLabel={status === 'recording' ? 'Listening' : 'Audio waveform'}><View style={[styles.waveBar, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBarTall, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBar, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBarTall, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBar, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBarTall, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBar, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBarTall, status === 'recording' && styles.waveBarActive]} /><View style={[styles.waveBar, status === 'recording' && styles.waveBarActive]} /></View>
         <Animated.View style={{ transform: [{ scale: pulse }] }}>
@@ -321,7 +359,7 @@ export default function VoiceAssistantScreen() {
           </TouchableOpacity>
         </Animated.View>
         <Text style={styles.hint}>
-          {status === 'recording' ? 'Listening… tap to stop and send' : status === 'processing' ? 'Processing your request…' : 'Tap to speak'}
+          {status === 'recording' ? 'Listening… tap to stop and send' : status === 'processing' ? 'Processing your request…' : 'Speak or type your request'}
         </Text>
       </View>
     </ScreenContainer>
@@ -346,6 +384,11 @@ const styles = StyleSheet.create({
   errorText: { color: colors.danger },
   retryButton: { marginTop: 10 },
   controls: { alignItems: 'center', paddingBottom: 8, paddingTop: 12 },
+  textEntry: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  textInput: { flex: 1, minHeight: 46, borderWidth: 1, borderColor: colors.border, borderRadius: 14, backgroundColor: colors.white, color: colors.text, paddingHorizontal: 14, paddingVertical: 10 },
+  sendButton: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 14, backgroundColor: colors.primary },
+  sendButtonDisabled: { opacity: 0.45 },
+  sendText: { color: colors.white, fontWeight: '700' },
   spinner: { marginBottom: 10 },
   mic: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
   recording: { backgroundColor: colors.danger },
