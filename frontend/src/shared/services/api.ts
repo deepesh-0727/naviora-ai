@@ -4,9 +4,6 @@ import { getAccessToken, getRefreshToken, saveAccessToken } from './secure_store
 import type { Role } from '../types/roles';
 import { CONFIG } from '../../../config';
 
-const API_BASE = CONFIG.API_BASE_URL.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
-const API_PREFIX = '/api/v1';
-
 const buildRolePrefix = (role: Role | null): string => {
   if (role === 'patient') return '/api/v1';
   if (role === 'admin' || role === 'super_admin') return '/api/v1/admin';
@@ -15,17 +12,19 @@ const buildRolePrefix = (role: Role | null): string => {
 
 export const buildApiUrl = (role: Role | null, path: string) => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${buildRolePrefix(role)}${normalizedPath}`;
+  return `${buildRolePrefix(role)}${normalizedPath}`.replace(/^\/api\/v1(?=\/)/, '');
 };
 
 export const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE,
+  baseURL: CONFIG.API_BASE_URL,
   timeout: 20000,
   headers: {
     Accept: 'application/json',
     'Content-Type': 'application/json',
   },
 });
+
+console.log("API Base URL is:", CONFIG.API_BASE_URL);
 
 let refreshInFlight: Promise<string | null> | null = null;
 
@@ -53,7 +52,7 @@ apiClient.interceptors.response.use(
         if (!refreshToken) return null;
 
         try {
-          const response = await axios.post(`${API_BASE}${API_PREFIX}/auth/refresh`, { refresh_token: refreshToken });
+          const response = await axios.post(`${CONFIG.API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
           const accessToken = response.data?.access_token ?? response.data?.token;
           if (typeof accessToken !== 'string' || accessToken.length === 0) return null;
           await saveAccessToken(accessToken);
@@ -144,10 +143,10 @@ export interface EmergencyCase {
 
 export const api = {
   auth: {
-    login: <T = unknown>(payload: Record<string, unknown>) => apiClient.post<T>(`${API_BASE}${API_PREFIX}/auth/login`, payload),
+    login: <T = unknown>(payload: Record<string, unknown>) => apiClient.post<T>('/auth/login', payload),
     otpVerify: <T = unknown>(role: Role | null, payload: Record<string, unknown>) =>
       apiClient.post<T>(buildApiUrl(role, '/auth/otp/verify'), payload),
-    refresh: <T = unknown>(payload: Record<string, unknown>) => apiClient.post<T>(`${API_BASE}${API_PREFIX}/auth/refresh`, payload),
+    refresh: <T = unknown>(payload: Record<string, unknown>) => apiClient.post<T>('/auth/refresh', payload),
   },
   patient: {
     getProfile: () => apiClient.get<PatientProfile>(buildApiUrl('patient', '/patients/profile')),
@@ -211,13 +210,13 @@ export const api = {
     deleteAccount: (password: string) => apiClient.delete<void>(buildApiUrl('patient', '/auth/account'), { data: { password } }),
   },
   staff: {
-    getQueue: <T = unknown>() => apiClient.get<T>(buildApiUrl('doctor', '/staff/doctor/queue')),
+    getQueue: <T = unknown>() => apiClient.get<T>(buildApiUrl('doctor', '/doctor/queue')),
     getDoctorSchedule: <T = unknown>(date?: string) =>
-      apiClient.get<T>(buildApiUrl('doctor', '/staff/doctor/schedule'), { params: { date } }),
+      apiClient.get<T>(buildApiUrl('doctor', '/doctor/schedule'), { params: { date } }),
   },
   admin: {
-    getDashboard: <T = unknown>() => apiClient.get<T>(buildApiUrl('admin', '/admin/dashboard/kpis')),
-    getUsers: <T = unknown>() => apiClient.get<T>(buildApiUrl('admin', '/admin/users')),
+    getDashboard: <T = unknown>() => apiClient.get<T>(buildApiUrl('admin', '/dashboard/kpis')),
+    getUsers: <T = unknown>() => apiClient.get<T>(buildApiUrl('admin', '/users')),
   },
 };
 
