@@ -111,6 +111,12 @@ export default function VoiceAssistantScreen() {
     try {
       const form = new FormData();
       const extension = uri.split('?')[0].split('.').pop()?.toLowerCase() ?? 'm4a';
+      const supportedExtensions = ['m4a', 'mp4', 'aac', '3gp', 'wav', 'webm'];
+      if (!supportedExtensions.includes(extension)) {
+        setStatus('idle');
+        addErrorMessage('This audio format is not supported. Please record a new voice request.');
+        return;
+      }
       const audioType = extension === 'webm'
         ? 'audio/webm'
         : extension === '3gp'
@@ -150,6 +156,10 @@ export default function VoiceAssistantScreen() {
       setStatus('idle');
       if (code === 404 || code === 501) {
         setUnavailable(true);
+      } else if (code === 413) {
+        addErrorMessage('This recording is too large to upload. Please record a shorter request.');
+      } else if (code === 415 || code === 422) {
+        addErrorMessage('The server could not read this audio format. Please record a new voice request.');
       } else {
         addErrorMessage('Something went wrong. Tap to retry.');
       }

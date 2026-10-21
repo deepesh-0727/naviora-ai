@@ -29,7 +29,8 @@ export function useEmergency(): EmergencyState {
     setError(null);
     setBackendUnavailable(false);
     try {
-      const res = await api.patient.triggerEmergency({ location, condition, patient_id: patientId });
+      const locationText = `Lat: ${location.lat.toFixed(3)}, Lng: ${location.lng.toFixed(3)}`;
+      const res = await api.patient.triggerEmergency({ location: locationText, description: condition ?? 'Emergency triggered via app' });
       setEmergencyCase(res.data);
       setStatus('active');
     } catch (err: unknown) {

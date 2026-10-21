@@ -247,7 +247,7 @@ export const api = {
       apiClient.put<{ message: string }>(buildApiUrl('patient', `/notifications/${id}/read`)),
     deleteNotification: (id: number) =>
       apiClient.delete<{ message: string }>(buildApiUrl('patient', `/notifications/${id}`)),
-    triggerEmergency: (payload: { location: { lat: number; lng: number }; patient_id?: string; condition?: string }) =>
+    triggerEmergency: (payload: { location: string; description?: string }) =>
       apiClient.post<EmergencyCase>(buildApiUrl('patient', '/emergency/trigger'), payload),
     cancelEmergency: (id: number) =>
       apiClient.post<EmergencyCase>(buildApiUrl('patient', `/emergency/${id}/cancel`)),

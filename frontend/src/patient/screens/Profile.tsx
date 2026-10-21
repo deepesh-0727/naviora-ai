@@ -59,12 +59,13 @@ export default function ProfileScreen() {
     const email = draft.email.trim();
     const phone = draft.phone.replace(/\D/g, '');
     const dob = draft.date_of_birth.trim();
+    const dateOfBirth = dob ? dob.slice(0, 10) : null;
     if (phone && !/^\d{10}$/.test(phone)) { setError('Enter a valid 10-digit Indian phone number.'); return; }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Enter a valid email address.'); return; }
-    if (dob && (Number.isNaN(Date.parse(dob)) || new Date(dob) > new Date())) { setError('Enter a valid date of birth that is not in the future.'); return; }
+    if (dob && (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth ?? '') || Number.isNaN(Date.parse(`${dateOfBirth}T00:00:00`)) || new Date(`${dateOfBirth}T00:00:00`) > new Date())) { setError('Enter a valid date of birth in YYYY-MM-DD format that is not in the future.'); return; }
     setSaving(true); setError(null);
     try {
-      await api.patient.updateProfile({ ...draft, phone: phone || null, email: email || null, allergies: draft.allergies.split(',').map((item) => item.trim()).filter(Boolean) });
+      await api.patient.updateProfile({ ...draft, date_of_birth: dateOfBirth, gender: draft.gender.trim().toLowerCase() || null, blood_group: draft.blood_group.replace(/\s+/g, '').toUpperCase() || null, phone: phone || null, email: email || null, allergies: draft.allergies.split(',').map((item) => item.trim()).filter(Boolean) });
       setEditing(false);
       await loadProfile();
     } catch (cause: unknown) {

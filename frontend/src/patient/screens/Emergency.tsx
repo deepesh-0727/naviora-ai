@@ -42,7 +42,8 @@ export default function EmergencyScreen() {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== 'granted') { setLocationDenied(true); return; }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const response = await api.patient.triggerEmergency({ location: { lat: position.coords.latitude, lng: position.coords.longitude }, patient_id: user?.id, condition: undefined });
+      const location = `Lat: ${position.coords.latitude.toFixed(3)}, Lng: ${position.coords.longitude.toFixed(3)}`;
+      const response = await api.patient.triggerEmergency({ location, description: 'Emergency triggered via app' });
       setCaseId(response.data.id); setTimeline(['Emergency signal sent']); triggeredAt.current = Date.now(); setCancelAvailable(true);
       cancelTimer.current = setTimeout(() => { triggeredAt.current = null; setCancelAvailable(false); }, 30000);
     } catch (cause: unknown) {
