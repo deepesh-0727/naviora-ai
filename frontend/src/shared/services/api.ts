@@ -29,17 +29,38 @@ console.log("API Base URL is:", CONFIG.API_BASE_URL);
 let refreshInFlight: Promise<string | null> | null = null;
 
 apiClient.interceptors.request.use(async (config) => {
-  const token = await getAccessToken();
+  const requestUrl = `${config.baseURL ?? ''}${config.url ?? ''}`;
+  console.log('SENDING REQUEST TO:', requestUrl);
+
+  let token: string | null = null;
+  try {
+    token = await getAccessToken();
+  } catch (error) {
+    console.log('SECURE STORE TOKEN READ FAILED:', error instanceof Error ? error.message : error);
+  }
+  if (!token) {
+    console.log('WARNING: NO TOKEN FOUND IN SECURE STORE');
+  }
   if (token) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
   }
+  console.log('API REQUEST:', config.method?.toUpperCase(), requestUrl);
+  console.log('HEADERS:', {
+    ...config.headers?.toJSON?.(),
+    Authorization: token ? '[REDACTED; present]' : '[not present]',
+  });
   return config;
 });
 
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    console.log('API ERROR:', error.message);
+    if (error.response) {
+      console.log('API ERROR STATUS:', error.response.status);
+      console.log('API ERROR DATA:', error.response.data);
+    }
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
     if (error.response?.status !== 401 || !originalRequest || originalRequest._retry) {
       return Promise.reject(error);

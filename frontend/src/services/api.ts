@@ -56,15 +56,22 @@ async function request<T>(
   const url = `${CONFIG.API_BASE_URL}${endpoint}`;
   const token = await AsyncStorage.getItem('access_token');
   const language = await AsyncStorage.getItem('language');
-  
+
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     'Accept-Language': language || 'en',
   };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+
+  console.log('API REQUEST:', method, url);
+  console.log('HEADERS:', {
+    'Content-Type': headers['Content-Type'],
+    'Accept-Language': headers['Accept-Language'],
+    Authorization: token ? '[REDACTED; present]' : '[not present]',
+  });
 
   try {
     const response = await fetch(url, {
@@ -84,12 +91,15 @@ async function request<T>(
     if (response.ok) {
       return { data, status };
     } else {
+      console.log('API ERROR:', `${method} ${url} returned HTTP ${status}`);
+      console.log('API ERROR DATA:', data);
       return {
         error: getErrorMessage(data, 'An error occurred while calling the service'),
         status,
       };
     }
   } catch (err: any) {
+    console.log('API ERROR:', err?.message || 'Unknown fetch error');
     return {
       error: err.message || 'Network connectivity issue. Please check your network connection.',
       status: 0,

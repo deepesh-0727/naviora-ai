@@ -34,11 +34,19 @@ export default function ProfileScreen() {
     setLoading(true); setError(null); setUnavailable(false);
     try {
       const result = await api.patient.getProfile();
-      const data = result.data as ProfileRecord;
+      const data = result.data as ProfileRecord | null | undefined;
+      if (!data || typeof data !== 'object') {
+        console.log('PROFILE FETCH FAILED: response did not contain a profile object');
+        setProfile(null);
+        setError('Could not load your profile. Please try again.');
+        return;
+      }
+      console.log('PROFILE SUCCESS FIELDS:', Object.keys(data));
       setProfile(data);
-      setDraft({ first_name: data.first_name ?? '', last_name: data.last_name ?? '', date_of_birth: data.date_of_birth ?? '', gender: data.gender ?? '', blood_group: data.blood_group ?? '', phone: data.phone ?? '', email: data.email ?? '', emergency_contact_name: data.emergency_contact_name ?? '', emergency_contact: data.emergency_contact ?? '', allergies: data.allergies?.join(', ') ?? '', insurance_provider: data.insurance_provider ?? '', insurance_number: data.insurance_number ?? '' });
+      setDraft({ first_name: data.first_name ?? '', last_name: data.last_name ?? '', date_of_birth: data.date_of_birth ?? '', gender: data.gender ?? '', blood_group: data.blood_group ?? '', phone: data.phone ?? '', email: data.email ?? '', emergency_contact_name: data.emergency_contact_name ?? '', emergency_contact: data.emergency_contact ?? '', allergies: Array.isArray(data.allergies) ? data.allergies.join(', ') : '', insurance_provider: data.insurance_provider ?? '', insurance_number: data.insurance_number ?? '' });
     } catch (cause: unknown) {
       const code = (cause as RequestError).response?.status;
+      console.log('PROFILE FETCH FAILED:', cause instanceof Error ? cause.message : String(cause), 'HTTP STATUS:', code ?? 'none');
       if (code === 404 || code === 501) setUnavailable(true);
       else setError('Could not load your profile. Please try again.');
     } finally { setLoading(false); }
