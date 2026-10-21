@@ -24,8 +24,18 @@ async def dashboard_kpis(
 ):
     base = await analytics_service.get_hospital_kpis(db)
     patients = await db.scalar(select(func.count(Patient.id)))
+    users = await db.scalar(select(func.count(User.id)))
+    appointments = await db.scalar(select(func.count(Appointment.id)))
+    emergencies = await db.scalar(select(func.count(EmergencyCase.id)))
     staff = await db.scalar(select(func.count(User.id)).where(User.role.notin_(["patient", "admin", "super_admin"]), User.is_active.is_(True)))
-    return {**base, "patients_total": patients or 0, "active_staff": staff or 0}
+    return {
+        **base,
+        "users_total": users or 0,
+        "patients_total": patients or 0,
+        "active_staff": staff or 0,
+        "appointments_total": appointments or 0,
+        "emergencies_total": emergencies or 0,
+    }
 
 
 @router.get("/charts")

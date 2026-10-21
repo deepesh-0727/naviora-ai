@@ -38,7 +38,7 @@ export default function DoctorDashboard() {
     setMissingEndpoint(null);
     try {
       const [schedule, queue, stats] = await Promise.all([
-        apiClient.get<unknown>(buildApiUrl('doctor', '/doctor/schedule'), { params: { date: 'today' } }),
+        apiClient.get<unknown>(buildApiUrl('doctor', '/doctor/schedule')),
         apiClient.get<unknown>(buildApiUrl('doctor', '/doctor/queue')),
         apiClient.get<unknown>(buildApiUrl('doctor', '/doctor/stats/today')),
       ]);
@@ -55,6 +55,7 @@ export default function DoctorDashboard() {
         ? (reason as { config?: { url?: string } }).config?.url
         : undefined;
       if (status === 404 || status === 501) setMissingEndpoint(url ?? 'GET /staff/doctor/schedule');
+      else if (status === 500) setError('The server could not load doctor data. Check the backend database logs and try again.');
       else setError('Could not load today’s doctor dashboard.');
     } finally {
       setLoading(false);

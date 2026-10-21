@@ -19,6 +19,7 @@ from app.models.user import User
 from app.models.patient import Patient
 from app.models.doctor import Doctor
 from app.models.security import RefreshToken
+from app.models.hospital import AuditLog
 from app.services.auth_service import auth_service
 from app.services.notification.email_service import email_service
 from app.services.otp_service import otp_service
@@ -34,6 +35,7 @@ async def _token_claims_for_user(db: AsyncSession, user: User) -> dict[str, int 
         "role": user.role,
         "patient_id": None,
         "staff_id": None,
+        "admin_id": None,
         "department_id": None,
         "ward_id": None,
         "admin_level": None,
@@ -51,6 +53,8 @@ async def _token_claims_for_user(db: AsyncSession, user: User) -> dict[str, int 
             claims["department_id"] = doctor.department_id
     elif user.role in {"nurse", "front_desk", "pharmacy", "facilities", "emergency", "staff"}:
         claims["staff_id"] = user.id
+    elif user.role in {"admin", "super_admin"}:
+        claims["admin_id"] = user.id
     return claims
 
 
@@ -68,14 +72,27 @@ class UserProfileUpdate(BaseModel):
     phone: str = Field(min_length=1, max_length=20)
 
 @router.get("/me")
-async def current_user(current_user=Depends(deps.get_current_active_user)):
-    return {
+async def current_user(
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    claims = await _token_claims_for_user(db, current_user)
+    profile = {
         "id": current_user.id,
         "phone": current_user.phone,
         "email": current_user.email,
         "role": current_user.role,
         "is_verified": current_user.is_verified,
     }
+    if current_user.role != "patient":
+        profile.update({
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "staff_id": claims["staff_id"],
+            "admin_id": claims["admin_id"],
+            "department_id": claims["department_id"],
+        })
+    return profile
 
 @router.put("/me")
 async def update_current_user(
@@ -107,7 +124,7 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A user with this phone number already exists."
         )
-    
+
     existing_email = await auth_service.get_user_by_email(db, user_in.email)
     if existing_email:
         raise HTTPException(
@@ -135,7 +152,22 @@ async def login(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect email/phone number or password."
         )
-    
+
+    # Persist successful authentication in the same transaction, without storing
+    # credentials or access/refresh token values.
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="login",
+            resource="auth",
+            method="POST",
+            resource_id="/api/v1/auth/login",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent", "")[:255] or None,
+            status="200",
+        )
+    )
+
     token_claims = await _token_claims_for_user(db, user)
     access_token = security.create_access_token(subject=user.id, claims=token_claims)
     refresh_token = security.create_refresh_token(subject=user.id, claims=token_claims)
@@ -245,7 +277,7 @@ async def forgot_password(email: str, db: AsyncSession = Depends(get_db)):
     user = await auth_service.get_user_by_email(db, email)
     if not user:
         return {"message": "If that email is registered, a password reset link has been sent."}
-    
+
     token = secrets.token_urlsafe(32)
     redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
     try:
@@ -260,7 +292,6 @@ async def forgot_password(email: str, db: AsyncSession = Depends(get_db)):
         await redis.aclose()
     return {"message": "If that email is registered, a password reset link has been sent."}
 
-from pydantic import BaseModel
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str = Field(min_length=8, max_length=128)
@@ -275,7 +306,7 @@ async def reset_password(request: ResetPasswordRequest, db: AsyncSession = Depen
         user_id_str = await redis.get(f"reset_token:{request.token}")
         if not user_id_str:
             raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
-        
+
         user_id = int(user_id_str)
         from app.models.user import User
         from sqlalchemy.future import select
@@ -283,11 +314,11 @@ async def reset_password(request: ResetPasswordRequest, db: AsyncSession = Depen
         user = result.scalars().first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         user.password_hash = security.get_password_hash(request.new_password)
         await db.commit()
         await redis.delete(f"reset_token:{request.token}")
     finally:
         await redis.aclose()
-    
+
     return {"message": "Password updated successfully"}

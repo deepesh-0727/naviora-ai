@@ -3,7 +3,7 @@ import { isAxiosError } from 'axios';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors } from '../../shared/theme/colors';
 import { Button, Card, EmptyState, ErrorState, Loader, ScreenContainer, SectionHeader } from '../../shared/components';
-import { apiClient } from '../../shared/services/api';
+import { apiClient, buildApiUrl } from '../../shared/services/api';
 import { useAlert } from '../../context/AlertContext';
 
 type StaffRole = 'doctor' | 'nurse' | 'admin';
@@ -32,8 +32,8 @@ export default function UserManagement() {
     setError(null);
     try {
       const [usersResponse, departmentsResponse] = await Promise.all([
-        apiClient.get<{ items: StaffRow[] }>('/api/v1/admin/users'),
-        apiClient.get<{ items: Department[] }>('/api/v1/admin/departments'),
+        apiClient.get<{ items: StaffRow[] }>(buildApiUrl('admin', '/users')),
+        apiClient.get<{ items: Department[] }>(buildApiUrl('admin', '/departments')),
       ]);
       setRows(usersResponse.data.items ?? []);
       setDepartments(departmentsResponse.data.items ?? []);
@@ -62,7 +62,7 @@ export default function UserManagement() {
     };
     setSaving(true);
     try {
-      await apiClient.post('/api/v1/admin/staff', payload);
+      await apiClient.post(buildApiUrl('admin', '/users'), payload);
       setVisible(false);
       setForm(emptyForm);
       showAlert('Staff account created successfully.', 'success');

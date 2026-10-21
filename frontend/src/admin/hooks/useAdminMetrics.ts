@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { isAxiosError } from 'axios';
-import { apiClient } from '../../shared/services/api';
+import { apiClient, buildApiUrl } from '../../shared/services/api';
 
 export interface AdminMetrics {
   kpis: Record<string, number | string | null>;
@@ -17,7 +17,11 @@ export function useAdminMetrics() {
     setLoading(true);
     setError(null);
     setUnavailable(null);
-    const paths = ['/api/v1/admin/dashboard/kpis', '/api/v1/admin/dashboard/charts', '/api/v1/admin/dashboard/alerts'] as const;
+    const paths = [
+      buildApiUrl('admin', '/dashboard/kpis'),
+      buildApiUrl('admin', '/dashboard/charts'),
+      buildApiUrl('admin', '/dashboard/alerts'),
+    ] as const;
     try {
       const [kpis, charts, alerts] = await Promise.all(paths.map(path => apiClient.get<Record<string, unknown>>(path)));
       const metricData: Record<string, number | string | null> = {};
@@ -28,6 +32,8 @@ export function useAdminMetrics() {
     } catch (cause) {
       if (isAxiosError(cause) && (cause.response?.status === 404 || cause.response?.status === 501)) {
         setUnavailable(isAxiosError(cause) && typeof cause.config?.url === 'string' ? cause.config.url : paths[0]);
+      } else if (isAxiosError(cause) && cause.response?.status === 500) {
+        setError('The server could not load administration data. Check the backend database logs and try again.');
       } else setError('Could not load administration metrics.');
     } finally {
       setLoading(false);

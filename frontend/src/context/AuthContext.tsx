@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const roleMatchesZone = zone === 'patient'
       ? role === 'patient'
       : zone === 'admin'
-        ? role === 'admin'
+        ? role === 'admin' || role === 'super_admin'
         : role === 'doctor' || role === 'nurse' || role === 'front_desk' || role === 'pharmacy' || role === 'facilities' || role === 'emergency' || role === 'staff';
     if (!role || !roleMatchesZone) {
       await AsyncStorage.multiRemove(['access_token', 'refresh_token']);

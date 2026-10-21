@@ -46,7 +46,19 @@ class WaypointCreate(BaseModel):
 @router.get("")
 async def list_departments(current_user: User = Depends(deps.check_role(ADMIN_ROLES)), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Department).order_by(Department.name))
-    return {"items": result.scalars().all()}
+    return {"items": [
+        {
+            "id": department.id,
+            "name": department.name,
+            "description": department.description,
+            "floor": department.floor,
+            "building": department.building,
+            "wing": department.wing,
+            "phone": department.phone,
+            "email": department.email,
+        }
+        for department in result.scalars().all()
+    ]}
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
