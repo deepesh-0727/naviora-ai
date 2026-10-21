@@ -145,6 +145,7 @@ async def test_update_profile_persists_fields_and_rejects_empty_or_duplicate(asy
         json={"emergency_contact": "   ", "emergency_contact_name": ""},
     )
     assert updated.status_code == 200 and updated.json()["message"] == "Profile updated successfully"
+    assert updated.json()["data"]["first_name"] == "Updated"
     assert ctx["patient"].first_name == "Updated" and ctx["patient_user"].phone == "9800008899"
     assert (empty.status_code, empty.json()["detail"]) == (422, "At least one profile field is required.")
     assert (duplicate.status_code, duplicate.json()["detail"]) == (409, "Email is already in use.")

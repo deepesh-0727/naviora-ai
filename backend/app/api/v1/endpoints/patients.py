@@ -246,7 +246,26 @@ async def update_profile(
         setattr(patient, field, value)
 
     await db.commit()
-    return {"message": "Profile updated successfully", "data": profile_update}
+    await db.refresh(patient)
+    return {
+        "message": "Profile updated successfully",
+        "data": {
+            "id": patient.id,
+            "first_name": patient.first_name,
+            "last_name": patient.last_name,
+            "email": current_user.email,
+            "phone": current_user.phone,
+            "blood_group": patient.blood_group,
+            "allergies": patient.allergies,
+            "emergency_contact": patient.emergency_contact,
+            "emergency_contact_name": patient.emergency_contact_name,
+            "medical_history": patient.medical_history,
+            "insurance_provider": patient.insurance_provider,
+            "insurance_number": patient.insurance_number,
+            "date_of_birth": patient.date_of_birth.isoformat() if patient.date_of_birth else None,
+            "gender": patient.gender,
+        },
+    }
 
 @router.get("/history")
 async def get_history(

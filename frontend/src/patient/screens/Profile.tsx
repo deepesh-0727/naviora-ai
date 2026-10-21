@@ -65,9 +65,10 @@ export default function ProfileScreen() {
     if (dob && (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth ?? '') || Number.isNaN(Date.parse(`${dateOfBirth}T00:00:00`)) || new Date(`${dateOfBirth}T00:00:00`) > new Date())) { setError('Enter a valid date of birth in YYYY-MM-DD format that is not in the future.'); return; }
     setSaving(true); setError(null);
     try {
-      await api.patient.updateProfile({ ...draft, date_of_birth: dateOfBirth, gender: draft.gender.trim().toLowerCase() || null, blood_group: draft.blood_group.replace(/\s+/g, '').toUpperCase() || null, phone: phone || null, email: email || null, emergency_contact_name: draft.emergency_contact_name.trim() || null, emergency_contact: draft.emergency_contact.trim() || null, allergies: draft.allergies.split(',').map((item) => item.trim()).filter(Boolean) });
+      const response = await api.patient.updateProfile({ ...draft, date_of_birth: dateOfBirth, gender: draft.gender.trim().toLowerCase() || null, blood_group: draft.blood_group.replace(/\s+/g, '').toUpperCase() || null, phone: phone || null, email: email || null, emergency_contact_name: draft.emergency_contact_name.trim() || null, emergency_contact: draft.emergency_contact.trim() || null, allergies: draft.allergies.split(',').map((item) => item.trim()).filter(Boolean) });
+      setProfile((current) => current ? { ...current, ...response.data.data } : response.data.data);
+      setError(null);
       setEditing(false);
-      await loadProfile();
     } catch (cause: unknown) {
       const code = (cause as RequestError).response?.status;
       if (code === 404 || code === 501) setUnavailable(true);

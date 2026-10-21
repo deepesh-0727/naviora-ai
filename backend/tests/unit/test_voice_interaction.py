@@ -7,6 +7,7 @@ from app.models.user import User
 from app.models.voice_interaction import VoiceInteraction
 from app.services.voice import stt_service, tts_service
 from app.services.voice.voice_orchestrator import intent_executor, voice_orchestrator
+from app.services.voice_pending_service import voice_pending_service
 from sqlalchemy import select
 
 
@@ -40,6 +41,10 @@ async def test_voice_process_persists_interaction_after_response(
     monkeypatch.setattr(intent_executor, "execute", AsyncMock(return_value="Appointment request recorded."))
     monkeypatch.setattr(tts_service.tts_service, "synthesize", AsyncMock(return_value=None))
     monkeypatch.setattr(voice_orchestrator, "session_factory", test_session_factory)
+    monkeypatch.setattr(voice_pending_service, "get_pending", AsyncMock(return_value=None))
+    monkeypatch.setattr(voice_pending_service, "get_resolution", AsyncMock(return_value=None))
+    monkeypatch.setattr(voice_pending_service, "clear_pending", AsyncMock())
+    monkeypatch.setattr(voice_pending_service, "clear_resolution", AsyncMock())
 
     response = await async_client.post(
         "/api/v1/voice/process",
@@ -89,5 +94,6 @@ async def test_voice_process_returns_retry_message_when_audio_cannot_be_transcri
 
     assert response.status_code == 200
     assert response.json()["text"] == ""
-    assert response.json()["response_text"] == "I couldn't hear that. Please try again."
+    assert response.json()["intent"] == "unknown"
+    assert response.json()["response_text"] == "I couldn't hear that clearly. Please try speaking again."
     assert response.json()["fallback_used"] is True

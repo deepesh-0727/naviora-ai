@@ -191,6 +191,11 @@ export interface PatientProfile {
   gender?: string | null;
 }
 
+export interface PatientProfileUpdateResponse {
+  message: string;
+  data: PatientProfile;
+}
+
 export interface PatientNotification {
   id: number;
   title?: string | null;
@@ -224,7 +229,7 @@ export const api = {
   patient: {
     getProfile: () => apiClient.get<PatientProfile>(buildApiUrl('patient', '/patients/profile')),
     updateProfile: (payload: Partial<PatientProfile>) =>
-      apiClient.put<PatientProfile>(buildApiUrl('patient', '/patients/profile'), payload),
+      apiClient.put<PatientProfileUpdateResponse>(buildApiUrl('patient', '/patients/profile'), payload),
     getAppointments: (params?: Record<string, string | boolean | number>) =>
       apiClient.get<Appointment[]>(buildApiUrl('patient', '/appointments'), { params }),
     createAppointment: (payload: {

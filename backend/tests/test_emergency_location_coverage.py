@@ -113,6 +113,35 @@ async def test_sos_response_remains_successful_when_staff_notification_fails(asy
 
 
 @pytest.mark.asyncio
+async def test_patient_can_cancel_own_unassigned_emergency(async_client: AsyncClient, emergency_api_context, db_session):
+    ctx = emergency_api_context
+    response = await async_client.post(
+        f"/api/v1/emergency/{ctx['unassigned_case'].id}/cancel",
+        headers=ctx["patient_headers"],
+    )
+    assert response.status_code == 403
+
+    own_case = EmergencyCase(
+        patient_id=ctx["patient"].id,
+        status="triggered",
+        priority="3",
+        location_desc="Room 12",
+        description="Test cancellation",
+    )
+    db_session.add(own_case)
+    await db_session.commit()
+    response = await async_client.post(
+        f"/api/v1/emergency/{own_case.id}/cancel",
+        headers=ctx["patient_headers"],
+    )
+    await db_session.refresh(own_case)
+
+    assert response.status_code == 200
+    assert response.json() == {"id": own_case.id, "status": "cancelled"}
+    assert own_case.status == "cancelled"
+
+
+@pytest.mark.asyncio
 async def test_emergency_status_active_and_ownership(async_client: AsyncClient, emergency_api_context):
     ctx = emergency_api_context
     own = await async_client.get(f"/api/v1/emergency/status/{ctx['case'].id}", headers=ctx["patient_headers"])

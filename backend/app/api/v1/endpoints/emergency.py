@@ -47,6 +47,37 @@ async def trigger_sos(
     EMERGENCY_TRIGGERS_TOTAL.inc()
     return result
 
+
+@router.post("/{emergency_id}/cancel")
+async def cancel_emergency(
+    emergency_id: int,
+    current_user: User = Depends(deps.get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    emergency = await db.get(EmergencyCase, emergency_id)
+    if emergency is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Emergency case not found.")
+
+    if current_user.role == "patient":
+        patient_result = await db.execute(select(Patient).where(Patient.user_id == current_user.id))
+        patient = patient_result.scalars().first()
+        if patient is None or emergency.patient_id != patient.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only cancel your own emergency.")
+    elif current_user.role not in {"doctor", "nurse", "staff", "admin"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not authorized to cancel emergencies.")
+
+    if emergency.status != "triggered":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only an unassigned emergency can be cancelled.")
+
+    emergency.status = "cancelled"
+    await db.commit()
+    await db.refresh(emergency)
+    event_data = {"emergency_id": emergency.id, "patient_id": emergency.patient_id, "status": emergency.status}
+    await ws_manager.broadcast_event("emergency", "emergency_status", event_data)
+    if emergency.patient_id is not None:
+        await ws_manager.broadcast_event(f"patient:{emergency.patient_id}", "emergency_status", event_data)
+    return {"id": emergency.id, "status": emergency.status}
+
 @router.post("/respond/{emergency_id}")
 async def respond_to_emergency(
     emergency_id: int,

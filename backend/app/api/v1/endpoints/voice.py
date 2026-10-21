@@ -124,7 +124,8 @@ async def process_voice_command(
             return VoiceProcessResponse(
                 query="",
                 text="",
-                response_text="I couldn't hear that. Please try again.",
+                intent="unknown",
+                response_text="I couldn't hear that clearly. Please try speaking again.",
                 session_id=session_id,
                 fallback_used=True,
                 fallback_reason="audio_transcription_unavailable",
