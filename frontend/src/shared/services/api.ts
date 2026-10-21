@@ -1,7 +1,7 @@
 import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { getAccessToken, getRefreshToken, saveTokens } from './secure_store';
+import { getAccessToken, getRefreshToken, normalizeStoredToken, saveTokens } from './secure_store';
 import type { Role } from '../types/roles';
 import { CONFIG } from '../../../config';
 
@@ -48,10 +48,15 @@ apiClient.interceptors.request.use(async (config) => {
       console.log('ASYNC STORAGE TOKEN READ FAILED:', error instanceof Error ? error.message : error);
     }
   }
+  if (token) {
+    token = normalizeStoredToken(token);
+    if (!token) token = null;
+  }
   if (!token) {
     console.log('NO TOKEN FOUND IN EITHER STORE');
   } else {
     console.log('TOKEN SOURCE:', tokenSource);
+    console.log('TOKEN FORMAT:', token.split('.').length === 3 ? 'three-segment JWT' : 'not a three-segment JWT');
   }
   if (token) {
     config.headers = config.headers ?? {};
@@ -87,10 +92,11 @@ apiClient.interceptors.response.use(
         } catch (storageError) {
           console.log('SECURESTORE REFRESH TOKEN READ FAILED:', storageError instanceof Error ? storageError.message : storageError);
         }
-        let storedRefreshToken = refreshToken;
+        let storedRefreshToken = refreshToken ? normalizeStoredToken(refreshToken) : null;
         if (!storedRefreshToken) {
           try {
-            storedRefreshToken = await AsyncStorage.getItem('refresh_token');
+            const asyncRefreshToken = await AsyncStorage.getItem('refresh_token');
+            storedRefreshToken = asyncRefreshToken ? normalizeStoredToken(asyncRefreshToken) : null;
           } catch (storageError) {
             console.log('ASYNC STORAGE REFRESH TOKEN READ FAILED:', storageError instanceof Error ? storageError.message : storageError);
           }

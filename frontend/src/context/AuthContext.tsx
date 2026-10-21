@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '../services/api';
-import { clearTokens, saveTokens } from '../shared/services/secure_store';
+import { clearTokens, normalizeStoredToken, saveTokens } from '../shared/services/secure_store';
 
 export type UserRole = 'patient' | 'doctor' | 'nurse' | 'front_desk' | 'pharmacy' | 'facilities' | 'emergency' | 'staff' | 'admin' | 'super_admin';
 export type LoginZone = 'patient' | 'staff' | 'admin';
@@ -51,6 +51,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string,
     zone: LoginZone = 'patient'
   ): Promise<{ success: boolean; error?: string }> => {
+    // A deliberate sign-in should never reuse tokens from an earlier account/session.
+    await AsyncStorage.multiRemove(['access_token', 'refresh_token']);
+    try {
+      await clearTokens();
+    } catch (storageError) {
+      console.log('SECURESTORE TOKEN CLEAR FAILED:', storageError instanceof Error ? storageError.message : storageError);
+    }
+
     // Use OAuth2 form-encoded login (FastAPI standard)
     const result = await apiService.postForm<{ access_token: string; refresh_token: string; token_type: string }>(
       '/auth/login',
@@ -60,19 +68,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!result.data?.access_token) {
       return { success: false, error: result.error || 'Incorrect email/phone number or password.' };
     }
+    const accessToken = normalizeStoredToken(result.data.access_token);
+    const refreshToken = result.data.refresh_token
+      ? normalizeStoredToken(result.data.refresh_token)
+      : undefined;
 
     // Keep the token available to both the shared SecureStore client and legacy
     // AsyncStorage clients. SecureStore failures must not prevent login.
     let secureStoreSaved = false;
     try {
-      await saveTokens(result.data.access_token, result.data.refresh_token);
+      await saveTokens(accessToken, refreshToken);
       secureStoreSaved = true;
     } catch (storageError) {
       console.log('SECURESTORE TOKEN SAVE FAILED:', storageError instanceof Error ? storageError.message : storageError);
     }
-    const tokenEntries: [string, string][] = [['access_token', result.data.access_token]];
-    if (result.data.refresh_token) {
-      tokenEntries.push(['refresh_token', result.data.refresh_token]);
+    const tokenEntries: [string, string][] = [['access_token', accessToken]];
+    if (refreshToken) {
+      tokenEntries.push(['refresh_token', refreshToken]);
     }
     await AsyncStorage.multiSet(tokenEntries);
     console.log(secureStoreSaved ? 'TOKENS SAVED TO BOTH STORES' : 'TOKENS SAVED TO ASYNC STORAGE; SECURESTORE UNAVAILABLE');
@@ -109,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role,
       phone: userData.phone,
       avatar: userData.avatar_url,
-      token: result.data.access_token,
+      token: accessToken,
     };
 
     await signIn(authUser);
