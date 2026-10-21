@@ -133,6 +133,8 @@ export default function VoiceAssistantScreen() {
           ? 'Microphone or speech recognition permission was denied. Open Settings to allow access.'
           : event.error === 'service-not-allowed'
             ? 'No speech recognition service is available. Enable a speech service on this device and try again.'
+            : event.error === 'no-speech'
+              ? "I didn't hear anything. Tap the mic and speak clearly, then pause to send."
             : `Speech recognition failed (${event.error}). Please try again.`);
       }
     });
@@ -203,10 +205,12 @@ export default function VoiceAssistantScreen() {
         interimResults: true,
         maxAlternatives: 1,
         continuous: false,
+        requiresOnDeviceRecognition: false,
         addsPunctuation: true,
         androidIntentOptions: {
-          EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 5000,
-          EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 5000,
+          EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 30000,
+          EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 3000,
+          EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 3000,
         },
       });
       recognitionActiveRef.current = true;
