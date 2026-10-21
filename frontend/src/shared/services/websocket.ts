@@ -43,7 +43,16 @@ class WebSocketClient {
     }
 
     this.setState(this.everConnected ? 'reconnecting' : 'connecting');
-    const token = await getAccessToken();
+    let token: string | null;
+    try {
+      token = await getAccessToken();
+    } catch {
+      if (attempt !== this.connectionAttempt || this.explicitlyDisconnected) return;
+      this.setState('disconnected');
+      this.emit('connection_error', new Error('WebSocket authentication is unavailable.'));
+      this.scheduleReconnect();
+      return;
+    }
     if (attempt !== this.connectionAttempt || this.explicitlyDisconnected) return;
     if (!token) {
       this.setState('disconnected');
@@ -52,7 +61,16 @@ class WebSocketClient {
     }
 
     this.addClaimRooms(token);
-    const socket = new WebSocket(`${CONFIG.WS_BASE_URL}?token=${encodeURIComponent(token)}`);
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(`${CONFIG.WS_BASE_URL}?token=${encodeURIComponent(token)}`);
+    } catch {
+      if (attempt !== this.connectionAttempt || this.explicitlyDisconnected) return;
+      this.setState('disconnected');
+      this.emit('connection_error', new Error('WebSocket connection could not be started.'));
+      this.scheduleReconnect();
+      return;
+    }
     this.socket = socket;
     socket.onopen = () => {
       if (this.socket !== socket) return;
@@ -65,7 +83,10 @@ class WebSocketClient {
       this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), HEARTBEAT_INTERVAL_MS);
     };
     socket.onmessage = (event) => this.handleMessage(socket, event.data);
-    socket.onerror = () => this.emit('connection_error', new Error('WebSocket connection failed.'));
+    socket.onerror = () => {
+      this.emit('connection_error', new Error('WebSocket connection failed; HTTP requests remain available.'));
+      socket.close();
+    };
     socket.onclose = () => {
       if (this.socket !== socket) return;
       this.connected = false;

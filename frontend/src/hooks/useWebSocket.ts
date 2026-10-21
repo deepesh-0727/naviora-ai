@@ -6,38 +6,63 @@ export const useWebSocket = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<any>(null);
   const ws = useRef<WebSocket | null>(null);
+  const mounted = useRef(false);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connect = useCallback(async () => {
-    const token = await AsyncStorage.getItem('access_token');
-    if (!token) return;
+    try {
+      const token = await AsyncStorage.getItem('access_token');
+      if (!mounted.current || !token) return;
 
-    ws.current = new WebSocket(`${CONFIG.WS_BASE_URL}?token=${encodeURIComponent(token)}`);
+      const socket = new WebSocket(`${CONFIG.WS_BASE_URL}?token=${encodeURIComponent(token)}`);
+      ws.current = socket;
 
-    ws.current.onopen = () => {
-      console.log('WebSocket Connected');
-      setIsConnected(true);
-    };
+      socket.onopen = () => {
+        if (ws.current !== socket) return;
+        console.log('WebSocket Connected');
+        setIsConnected(true);
+      };
 
-    ws.current.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        setLastMessage(data);
-      } catch (err) {
-        // Binary or non-json message
-        setLastMessage(e.data);
-      }
-    };
+      socket.onmessage = (e) => {
+        if (ws.current !== socket) return;
+        try {
+          const data = JSON.parse(e.data);
+          setLastMessage(data);
+        } catch {
+          // Binary or non-json message
+          setLastMessage(e.data);
+        }
+      };
 
-    ws.current.onerror = (e) => {
-      console.error('WebSocket Error:', e);
-    };
+      socket.onerror = () => {
+        if (ws.current === socket) setIsConnected(false);
+        // WebSocket is optional; HTTP-backed screens continue independently.
+        console.warn('WebSocket connection failed; continuing with HTTP.');
+        socket.close();
+      };
 
-    ws.current.onclose = () => {
-      console.log('WebSocket Disconnected');
+      socket.onclose = () => {
+        if (ws.current !== socket) return;
+        ws.current = null;
+        setIsConnected(false);
+        if (mounted.current && !reconnectTimer.current) {
+          reconnectTimer.current = setTimeout(() => {
+            reconnectTimer.current = null;
+            void connect();
+          }, 3000);
+        }
+      };
+    } catch {
+      if (!mounted.current) return;
       setIsConnected(false);
-      // Attempt reconnect after 3 seconds
-      setTimeout(connect, 3000);
-    };
+      console.warn('WebSocket unavailable; continuing with HTTP.');
+      if (mounted.current && !reconnectTimer.current) {
+        reconnectTimer.current = setTimeout(() => {
+          reconnectTimer.current = null;
+          void connect();
+        }, 3000);
+      }
+    }
   }, []);
 
   const sendMessage = useCallback((data: any) => {
@@ -51,9 +76,15 @@ export const useWebSocket = () => {
   }, [isConnected]);
 
   useEffect(() => {
-    connect();
+    mounted.current = true;
+    void connect();
     return () => {
-      ws.current?.close();
+      mounted.current = false;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
+      const socket = ws.current;
+      ws.current = null;
+      socket?.close();
     };
   }, [connect]);
 

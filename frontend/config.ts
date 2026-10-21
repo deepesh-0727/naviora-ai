@@ -32,15 +32,26 @@ const getHostUrl = (): string => {
 };
 
 const rawHost = getHostUrl();
-export const buildServiceUrls = (host: string, websocketUrl?: string) => {
+export const buildServiceUrls = (host: string, websocketUrl?: string, requireSecureWebSocket = false) => {
   const base = host.endsWith('/api/v1') ? host.slice(0, -7) : host;
+  const defaultWebSocketUrl = `${base.replace(/^https:/i, 'wss:').replace(/^http:/i, 'ws:')}/api/v1/stream`;
+  const configuredWebSocketUrl = (websocketUrl?.trim() || defaultWebSocketUrl)
+    .replace(/^https:/i, 'wss:')
+    .replace(/^http:/i, 'ws:');
+  const WS_BASE_URL = requireSecureWebSocket
+    ? configuredWebSocketUrl.replace(/^ws:/i, 'wss:')
+    : configuredWebSocketUrl;
   return {
     API_BASE_URL: host.endsWith('/api/v1') ? host : `${base}/api/v1`,
-    WS_BASE_URL: websocketUrl || `${base.replace(/^http/, 'ws')}/api/v1/stream`,
+    WS_BASE_URL,
   };
 };
 
-const serviceUrls = buildServiceUrls(rawHost, process.env.EXPO_PUBLIC_WS_URL);
+const serviceUrls = buildServiceUrls(
+  rawHost,
+  process.env.EXPO_PUBLIC_WS_URL,
+  ENV === 'production' || ENV === 'staging',
+);
 
 export const CONFIG = {
   ...serviceUrls,
