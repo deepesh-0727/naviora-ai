@@ -76,6 +76,7 @@ export const Loader = ({ message = 'Loading...' }: { message?: string }) => (
 
 export const EmptyState = ({ message = 'No data available.' }: { message?: string }) => (
   <View style={styles.centered}>
+    <Ionicons name="folder-open-outline" size={30} color={COLORS.textMuted} style={{ marginBottom: 8 }} />
     <Text style={styles.muted}>{message}</Text>
   </View>
 );

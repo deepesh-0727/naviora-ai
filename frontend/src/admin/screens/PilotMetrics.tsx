@@ -81,7 +81,7 @@ export default function PilotMetrics() {
     if (!hasLoaded.current) setLoading(true);
     setError(false);
     try {
-      const response = await apiClient.get<PilotMetricsResponse>('/api/v1/admin/pilot/metrics');
+      const response = await apiClient.get<PilotMetricsResponse>('/admin/pilot/metrics');
       setMetrics(response.data);
       setLastUpdated(Date.now());
       setClockNow(Date.now());

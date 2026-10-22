@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
 from app.db.session import get_db
 from app.models.bed import Bed
-from app.models.operations import Equipment, OperatingRoom
+from app.models.operations import Admission, Equipment, OperatingRoom
 from app.models.user import User
 
 router = APIRouter()
@@ -17,6 +17,20 @@ ADMIN_ROLES = ["admin", "super_admin"]
 
 class ResourceStatus(BaseModel):
     status: str = Field(min_length=2, max_length=30)
+
+
+class BedCreate(BaseModel):
+    bed_number: str = Field(min_length=1, max_length=40)
+    ward: str = Field(min_length=1, max_length=100)
+    floor: int
+    status: str = "available"
+
+
+class BedUpdate(BaseModel):
+    bed_number: str | None = Field(default=None, min_length=1, max_length=40)
+    ward: str | None = Field(default=None, min_length=1, max_length=100)
+    floor: int | None = None
+    status: str | None = Field(default=None, min_length=2, max_length=20)
 
 
 class RoomBlock(BaseModel):
@@ -46,21 +60,61 @@ async def list_beds(current_user: User = Depends(deps.check_role(ADMIN_ROLES)), 
     return {"items": result.scalars().all()}
 
 
-@router.put("/beds/{bed_id}")
-async def update_bed(bed_id: int, payload: ResourceStatus, current_user: User = Depends(deps.check_role(ADMIN_ROLES)), db: AsyncSession = Depends(get_db)):
+@router.post("/beds", status_code=status.HTTP_201_CREATED)
+async def create_bed(payload: BedCreate, current_user: User = Depends(deps.check_role(ADMIN_ROLES)), db: AsyncSession = Depends(get_db)):
     if payload.status not in {"available", "occupied", "cleaning", "reserved", "critical"}:
+        raise HTTPException(status_code=422, detail="Unsupported bed status.")
+    if await db.scalar(select(Bed.id).where(Bed.ward == payload.ward.strip(), Bed.bed_number == payload.bed_number.strip())) is not None:
+        raise HTTPException(status_code=409, detail="That bed number already exists in this ward.")
+    if payload.status in {"occupied", "critical"}:
+        raise HTTPException(status_code=422, detail="Beds must be assigned to a patient before they can be marked occupied or critical.")
+    bed = Bed(ward=payload.ward.strip(), bed_number=payload.bed_number.strip(), floor=payload.floor, status=payload.status)
+    db.add(bed)
+    await db.commit()
+    await db.refresh(bed)
+    return bed
+
+
+@router.put("/beds/{bed_id}")
+async def update_bed(bed_id: int, payload: BedUpdate, current_user: User = Depends(deps.check_role(ADMIN_ROLES)), db: AsyncSession = Depends(get_db)):
+    updates = payload.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=422, detail="Provide at least one bed field to update.")
+    if updates.get("status") is not None and updates["status"] not in {"available", "occupied", "cleaning", "reserved", "critical"}:
         raise HTTPException(status_code=422, detail="Unsupported bed status.")
     bed = await db.get(Bed, bed_id)
     if bed is None:
         raise HTTPException(status_code=404, detail="Bed not found.")
-    if payload.status == "available" and bed.patient_id is not None:
+    if updates.get("status") == "available" and bed.patient_id is not None:
         raise HTTPException(status_code=409, detail="A bed assigned to a patient cannot be made available.")
-    if payload.status in {"occupied", "critical"} and bed.patient_id is None:
+    if updates.get("status") in {"occupied", "critical"} and bed.patient_id is None:
         raise HTTPException(status_code=409, detail="A patient must be assigned to occupy this bed.")
-    bed.status = payload.status
+    ward = str(updates.get("ward", bed.ward)).strip()
+    bed_number = str(updates.get("bed_number", bed.bed_number)).strip()
+    duplicate = await db.scalar(select(Bed.id).where(Bed.ward == ward, Bed.bed_number == bed_number, Bed.id != bed_id))
+    if duplicate is not None:
+        raise HTTPException(status_code=409, detail="That bed number already exists in this ward.")
+    for key, value in updates.items():
+        setattr(bed, key, value.strip() if key in {"ward", "bed_number"} and value is not None else value)
     bed.updated_at = datetime.utcnow()
     await db.commit()
-    return {"id": bed.id, "status": bed.status}
+    await db.refresh(bed)
+    return bed
+
+
+@router.delete("/beds/{bed_id}")
+async def delete_bed(bed_id: int, current_user: User = Depends(deps.check_role(ADMIN_ROLES)), db: AsyncSession = Depends(get_db)):
+    bed = await db.get(Bed, bed_id)
+    if bed is None:
+        raise HTTPException(status_code=404, detail="Bed not found.")
+    if bed.patient_id is not None or bed.status in {"occupied", "critical"}:
+        raise HTTPException(status_code=409, detail="A bed assigned to a patient cannot be deleted.")
+    linked_admission = await db.scalar(select(Admission.id).where(Admission.bed_id == bed_id).limit(1))
+    if linked_admission is not None:
+        raise HTTPException(status_code=409, detail="A bed linked to an admission cannot be deleted.")
+    await db.delete(bed)
+    await db.commit()
+    return {"id": bed_id, "deleted": True}
 
 
 @router.get("/ors")

@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { isAxiosError } from 'axios';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors } from '../../shared/theme/colors';
 import { Button, Card, EmptyState, ErrorState, Loader, ScreenContainer, SectionHeader } from '../../shared/components';
 import { apiClient, buildApiUrl } from '../../shared/services/api';
 import { useAlert } from '../../context/AlertContext';
+import { useAuth } from '../../context/AuthContext';
 
 type StaffRole = 'doctor' | 'nurse' | 'admin';
+type ManagedRole = 'patient' | 'doctor' | 'nurse' | 'front_desk' | 'pharmacy' | 'facilities' | 'emergency' | 'staff' | 'admin';
+const managedRoles: ManagedRole[] = ['patient', 'doctor', 'nurse', 'front_desk', 'pharmacy', 'facilities', 'emergency', 'staff', 'admin'];
 type StaffRow = { id: number; first_name?: string | null; last_name?: string | null; email: string; phone: string; role: string; is_active: boolean; created_at?: string };
 type Department = { id: number; name: string };
 type StaffForm = { first_name: string; last_name: string; email: string; phone: string; password: string; role: StaffRole; department_id: string; specialization: string; license_number: string; years_of_experience: string };
@@ -17,6 +20,7 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, keybo
 }
 
 export default function UserManagement() {
+  const { user: signedInUser } = useAuth();
   const { showAlert } = useAlert();
   const [rows, setRows] = useState<StaffRow[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -24,6 +28,10 @@ export default function UserManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
+  const [roleEditorVisible, setRoleEditorVisible] = useState(false);
+  const [editingUser, setEditingUser] = useState<StaffRow | null>(null);
+  const [selectedRole, setSelectedRole] = useState<ManagedRole>('doctor');
+  const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
   const [form, setForm] = useState<StaffForm>(emptyForm);
   const update = (key: keyof StaffForm, value: string) => setForm(current => ({ ...current, [key]: value }));
 
@@ -75,6 +83,45 @@ export default function UserManagement() {
     }
   };
 
+  const openRoleEditor = (target: StaffRow) => {
+    setEditingUser(target);
+    setSelectedRole(managedRoles.includes(target.role as ManagedRole) ? target.role as ManagedRole : 'staff');
+    setRoleEditorVisible(true);
+  };
+
+  const saveRole = async () => {
+    if (!editingUser || updatingUserId !== null) return;
+    setUpdatingUserId(editingUser.id);
+    try {
+      await apiClient.put(buildApiUrl('admin', `/users/${editingUser.id}`), { role: selectedRole });
+      setRows(current => current.map(row => row.id === editingUser.id ? { ...row, role: selectedRole } : row));
+      setRoleEditorVisible(false);
+      showAlert('User role updated.', 'success');
+    } catch (cause) {
+      showAlert(isAxiosError(cause) ? String(cause.response?.data?.detail ?? 'Could not update this user role.') : 'Could not update this user role.', 'error');
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
+  const toggleActive = async (target: StaffRow) => {
+    if (target.id === Number(signedInUser?.id)) {
+      showAlert('You cannot deactivate your own administrator account.', 'warning');
+      return;
+    }
+    const nextActive = !target.is_active;
+    setUpdatingUserId(target.id);
+    try {
+      await apiClient.put(buildApiUrl('admin', `/users/${target.id}`), { is_active: nextActive });
+      setRows(current => current.map(row => row.id === target.id ? { ...row, is_active: nextActive } : row));
+      showAlert(nextActive ? 'User account reactivated.' : 'User account deactivated.', 'success');
+    } catch (cause) {
+      showAlert(isAxiosError(cause) ? String(cause.response?.data?.detail ?? 'Could not update this account.') : 'Could not update this account.', 'error');
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
   return <ScreenContainer>
     <SectionHeader title="Users" />
     <Text style={styles.description}>Hospital accounts, roles, and account state</Text>
@@ -84,6 +131,16 @@ export default function UserManagement() {
         <Text style={styles.userName}>{[user.first_name, user.last_name].filter(Boolean).join(' ') || user.email}</Text>
         <Text style={styles.userDetail}>{user.email} · {user.phone}</Text>
         <Text style={styles.userRole}>{user.role} · {user.is_active ? 'Active' : 'Inactive'}</Text>
+        <View style={styles.userActions}>
+          <Button title="Edit Role" variant="secondary" disabled={updatingUserId !== null || user.id === Number(signedInUser?.id) || user.role === 'super_admin'} onPress={() => openRoleEditor(user)} />
+          <Button title={user.is_active ? 'Deactivate' : 'Reactivate'} variant={user.is_active ? 'danger' : 'secondary'} loading={updatingUserId === user.id} disabled={updatingUserId !== null || user.id === Number(signedInUser?.id) || user.role === 'super_admin'} onPress={() => {
+            if (user.is_active) Alert.alert('Deactivate account?', `Deactivate ${user.email}?`, [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Deactivate', style: 'destructive', onPress: () => { void toggleActive(user); } },
+            ]);
+            else void toggleActive(user);
+          }} />
+        </View>
       </Card>)}
     </ScrollView>}
 
@@ -113,6 +170,15 @@ export default function UserManagement() {
         </ScrollView>
       </View></View>
     </Modal>
+
+    <Modal visible={roleEditorVisible} animationType="fade" transparent onRequestClose={() => setRoleEditorVisible(false)}>
+      <View style={styles.overlay}><View style={styles.roleModal}>
+        <View style={styles.modalHeader}><Text style={styles.modalTitle}>Edit user role</Text><Pressable accessibilityRole="button" onPress={() => setRoleEditorVisible(false)}><Text style={styles.close}>Close</Text></Pressable></View>
+        <Text style={styles.userDetail}>{editingUser?.email}</Text>
+        <View style={styles.departmentList}>{managedRoles.map(role => <Pressable key={role} accessibilityRole="button" onPress={() => setSelectedRole(role)} style={[styles.roleButton, selectedRole === role && styles.roleSelected]}><Text style={[styles.roleText, selectedRole === role && styles.roleTextSelected]}>{role.replace('_', ' ')}</Text></Pressable>)}</View>
+        <Button title="Save Role" loading={updatingUserId === editingUser?.id} disabled={updatingUserId !== null} onPress={() => void saveRole()} />
+      </View></View>
+    </Modal>
   </ScreenContainer>;
 }
 
@@ -124,8 +190,10 @@ const styles = StyleSheet.create({
   userName: { color: colors.text, fontSize: 16, fontWeight: '700' },
   userDetail: { color: colors.textMuted, marginTop: 4 },
   userRole: { color: colors.primary, marginTop: 6, textTransform: 'capitalize', fontWeight: '600' },
+  userActions: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
   modal: { maxHeight: '92%', backgroundColor: colors.background, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 18 },
+  roleModal: { maxHeight: '80%', backgroundColor: colors.background, borderRadius: 22, margin: 20, padding: 18 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   modalTitle: { color: colors.text, fontSize: 19, fontWeight: '700' },
   close: { color: colors.primary, fontWeight: '700', padding: 8 },

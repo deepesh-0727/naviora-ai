@@ -110,6 +110,16 @@ async def update_user(user_id: int, payload: UserUpdate, current_user: User = De
     updates = payload.model_dump(exclude_unset=True)
     if "role" in updates and updates["role"] not in MANAGED_ROLES:
         raise HTTPException(status_code=422, detail="Unsupported role.")
+    if user.id == current_user.id and updates.get("role", user.role) != user.role:
+        raise HTTPException(status_code=409, detail="You cannot change your own administrator role.")
+    if updates.get("role") == "doctor" and user.role != "doctor":
+        has_profile = await db.scalar(select(Doctor.id).where(Doctor.user_id == user.id))
+        if has_profile is None:
+            raise HTTPException(status_code=409, detail="Create a doctor account with its profile fields before assigning the doctor role.")
+    if updates.get("role") == "nurse" and user.role != "nurse":
+        has_profile = await db.scalar(select(NurseProfile.id).where(NurseProfile.user_id == user.id))
+        if has_profile is None:
+            raise HTTPException(status_code=409, detail="Create a nurse account with its profile fields before assigning the nurse role.")
     if "email" in updates:
         email = str(updates["email"])
         exists = await db.scalar(select(User.id).where(User.email == email, User.id != user_id))
