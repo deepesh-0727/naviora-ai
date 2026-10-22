@@ -14,6 +14,7 @@ import NurseDashboard from '../screens/NurseDashboard';
 import FrontDeskDashboard from '../screens/FrontDeskDashboard';
 import PharmacyDashboard from '../screens/PharmacyDashboard';
 import FacilitiesDashboard from '../screens/FacilitiesDashboard';
+import BillingDashboard from '../screens/BillingDashboard';
 import EmergencyConsole from '../screens/EmergencyConsole';
 import StaffNotifications from '../screens/StaffNotifications';
 import StaffProfile from '../screens/StaffProfile';
@@ -43,6 +44,7 @@ const STAFF_TABS: Record<Exclude<Role, 'patient' | 'admin' | 'super_admin'>, Tab
     { name: 'Home', title: 'Front Desk', endpoint: 'GET /staff/front-desk/dashboard', icon: 'grid-outline' },
     { name: 'Queue', title: 'Queue', endpoint: 'GET /staff/queue', icon: 'list-outline' },
     { name: 'Bookings', title: 'Bookings', endpoint: 'GET /staff/appointments', icon: 'calendar-outline' },
+    { name: 'Billing', title: 'Billing', endpoint: 'GET /staff/billing', icon: 'receipt-outline' },
     { name: 'Notifications', title: 'Notifications', endpoint: 'GET /staff/notifications', icon: 'notifications-outline' },
     { name: 'Profile', title: 'Profile', endpoint: 'GET /staff/profile', icon: 'person-outline' },
   ],
@@ -93,6 +95,7 @@ function RoleTabs({ role }: { role: Exclude<Role, 'patient' | 'admin' | 'super_a
               if (tab.name === 'Emergency') return <EmergencyConsole />;
               if (tab.name === 'Notifications') return <StaffNotifications />;
               if (tab.name === 'Profile') return <StaffProfile />;
+              if (role === 'front_desk' && tab.name === 'Billing') return <BillingDashboard />;
               if (role === 'pharmacy') return <PharmacyDashboard />;
               if (role === 'facilities') return <FacilitiesDashboard />;
               if (role === 'emergency') return <EmergencyConsole />;

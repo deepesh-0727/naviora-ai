@@ -6,11 +6,11 @@ import { Button, Card, EmptyState, ErrorState, Loader, ScreenContainer, SectionH
 import { apiClient, buildApiUrl } from '../../shared/services/api';
 import { useAlert } from '../../context/AlertContext';
 
-type BedStatus = 'available' | 'occupied' | 'cleaning' | 'reserved' | 'critical';
+type BedStatus = 'available' | 'occupied' | 'cleaning' | 'maintenance' | 'reserved' | 'critical';
 type Bed = { id: number; bed_number: string; ward: string; floor: number; status: BedStatus; patient_id?: number | null };
 type BedForm = { bed_number: string; ward: string; floor: string; status: BedStatus };
 const emptyForm: BedForm = { bed_number: '', ward: '', floor: '0', status: 'available' };
-const statuses: BedStatus[] = ['available', 'cleaning', 'reserved', 'occupied', 'critical'];
+const statuses: BedStatus[] = ['available', 'cleaning', 'maintenance', 'reserved', 'occupied', 'critical'];
 
 function Field({ label, value, onChangeText, keyboardType = 'default' }: { label: string; value: string; onChangeText: (value: string) => void; keyboardType?: 'default' | 'number-pad' }) {
   return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput value={value} onChangeText={onChangeText} keyboardType={keyboardType} placeholder={label} placeholderTextColor={colors.textMuted} style={styles.input} /></View>;

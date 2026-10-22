@@ -62,7 +62,7 @@ async def list_beds(current_user: User = Depends(deps.check_role(ADMIN_ROLES)), 
 
 @router.post("/beds", status_code=status.HTTP_201_CREATED)
 async def create_bed(payload: BedCreate, current_user: User = Depends(deps.check_role(ADMIN_ROLES)), db: AsyncSession = Depends(get_db)):
-    if payload.status not in {"available", "occupied", "cleaning", "reserved", "critical"}:
+    if payload.status not in {"available", "occupied", "cleaning", "maintenance", "reserved", "critical"}:
         raise HTTPException(status_code=422, detail="Unsupported bed status.")
     if await db.scalar(select(Bed.id).where(Bed.ward == payload.ward.strip(), Bed.bed_number == payload.bed_number.strip())) is not None:
         raise HTTPException(status_code=409, detail="That bed number already exists in this ward.")
@@ -80,7 +80,7 @@ async def update_bed(bed_id: int, payload: BedUpdate, current_user: User = Depen
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(status_code=422, detail="Provide at least one bed field to update.")
-    if updates.get("status") is not None and updates["status"] not in {"available", "occupied", "cleaning", "reserved", "critical"}:
+    if updates.get("status") is not None and updates["status"] not in {"available", "occupied", "cleaning", "maintenance", "reserved", "critical"}:
         raise HTTPException(status_code=422, detail="Unsupported bed status.")
     bed = await db.get(Bed, bed_id)
     if bed is None:
