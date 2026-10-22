@@ -42,7 +42,15 @@ async def get_staff_settings(
     db: AsyncSession = Depends(get_db),
 ):
     setting = await _setting(db, current_user.id)
-    return await _response(db, current_user.id, setting.preferences if setting else {})
+    defaults = {
+        "push_notifications": True,
+        "sms_notifications": True,
+        "email_notifications": True,
+        "voice_assistant_enabled": True,
+        "analytics_enabled": False,
+    }
+    preferences = {**defaults, **(setting.preferences if setting else {})}
+    return await _response(db, current_user.id, preferences)
 
 
 @router.put("/settings")

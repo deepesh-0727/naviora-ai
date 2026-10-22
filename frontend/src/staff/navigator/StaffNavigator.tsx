@@ -90,6 +90,7 @@ function RoleTabs({ role }: { role: Exclude<Role, 'patient' | 'admin' | 'super_a
               if (role === 'doctor' && tab.name === 'Queue') return <DoctorQueue />;
               if (role === 'nurse' && tab.name === 'Home') return <NurseDashboard />;
               if (role === 'front_desk' && tab.name === 'Home') return <FrontDeskDashboard />;
+              if (tab.name === 'Emergency') return <EmergencyConsole />;
               if (tab.name === 'Notifications') return <StaffNotifications />;
               if (tab.name === 'Profile') return <StaffProfile />;
               if (role === 'pharmacy') return <PharmacyDashboard />;

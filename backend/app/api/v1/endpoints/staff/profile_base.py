@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,15 +33,14 @@ async def _staff_profile(user: User, db: AsyncSession) -> dict:
     if user.role == "doctor":
         result = await db.execute(select(Doctor).where(Doctor.user_id == user.id))
         doctor = result.scalar_one_or_none()
-        if not doctor:
-            raise HTTPException(status_code=404, detail="Doctor profile not found.")
-        profile = {
-            "id": doctor.id,
-            "first_name": doctor.first_name,
-            "last_name": doctor.last_name,
-            "specialization": doctor.specialization,
-            "department_id": doctor.department_id,
-        }
+        if doctor:
+            profile = {
+                "id": doctor.id,
+                "first_name": doctor.first_name,
+                "last_name": doctor.last_name,
+                "specialization": doctor.specialization,
+                "department_id": doctor.department_id,
+            }
     return {
         "id": user.id,
         "email": user.email,

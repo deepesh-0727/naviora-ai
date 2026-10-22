@@ -1,7 +1,8 @@
+import { colors } from '../../shared/theme/colors';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 
-import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Loader, Modal, ScreenContainer, SectionHeader } from '../../shared/components';
+import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Header, Loader, Modal, ScreenContainer } from '../../shared/components';
 import { apiClient, buildApiUrl } from '../../shared/services/api';
 import { websocketClient } from '../../shared/services/websocket';
 
@@ -71,47 +72,46 @@ export default function EmergencyConsole() {
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [loadDetails, refreshActive, selectedId]);
 
-  const performAction = async (kind: 'assign' | 'message' | 'status', status?: string) => {
-    if (!selectedId) { setActionError('Select an active incident first.'); return; }
+  const performAction = async (kind: 'assign' | 'message' | 'status', status?: string, incidentId = selectedId) => {
+    if (!incidentId) { setActionError('Select an active incident first.'); return; }
     if (kind === 'assign' && !responderId.trim()) { setActionError('Enter the responder identifier.'); return; }
     if (kind === 'message' && !message.trim()) { setActionError('Enter a message to send.'); return; }
     setBusy(true); setActionError(null); setActionMessage(null);
-    const path = kind === 'assign' ? `/emergency/${encodeURIComponent(selectedId)}/assign`
-      : kind === 'message' ? `/emergency/${encodeURIComponent(selectedId)}/message`
-        : `/emergency/${encodeURIComponent(selectedId)}/status`;
+    const path = kind === 'assign' ? `/emergency/${encodeURIComponent(incidentId)}/assign`
+      : kind === 'message' ? `/emergency/${encodeURIComponent(incidentId)}/message`
+        : `/emergency/${encodeURIComponent(incidentId)}/status`;
     try {
       if (kind === 'status') await apiClient.put(buildApiUrl('emergency', path), { status });
       else await apiClient.post(buildApiUrl('emergency', path), kind === 'assign' ? { responder_id: responderId.trim() } : { message: message.trim() });
       setActionMessage(kind === 'assign' ? 'Responder assigned.' : kind === 'message' ? 'Message sent.' : `Incident marked ${status}.`);
       if (kind === 'assign') setAssignVisible(false);
       if (kind === 'message') setMessage('');
-      await Promise.all([refreshActive(), loadDetails(selectedId)]);
+      await refreshActive();
+      if (selectedId === incidentId) await loadDetails(incidentId);
     } catch (reason: unknown) {
       const code = typeof reason === 'object' && reason !== null && 'response' in reason ? (reason as { response?: { status?: number } }).response?.status : undefined;
       setActionError(code === 404 || code === 501 ? `${kind} action is not available on the backend yet.` : 'Emergency action failed. Retry when ready.');
     } finally { setBusy(false); }
   };
 
-  if (loading) return <Loader message="Loading emergency feed…" />;
-  if (unavailable) return <ScreenContainer><BackendNotAvailable endpoint={unavailable} /><Button title="Retry" variant="secondary" onPress={() => void refreshActive()} /></ScreenContainer>;
-  if (error) return <ErrorState message={error} onRetry={() => void refreshActive()} />;
+  if (loading) return <ScreenContainer><Header title="Emergency Console" /><Loader message="Loading emergency feed…" /></ScreenContainer>;
+  if (unavailable) return <ScreenContainer><Header title="Emergency Console" /><BackendNotAvailable endpoint={unavailable} /><Button title="Retry" variant="secondary" onPress={() => void refreshActive()} /></ScreenContainer>;
+  if (error) return <ScreenContainer><Header title="Emergency Console" /><ErrorState message={error} onRetry={() => void refreshActive()} /></ScreenContainer>;
 
   return (
     <ScreenContainer>
-      <SectionHeader title="Emergency Console" />
-      {actionError ? <Text accessibilityRole="alert" style={{ color: '#B42318', marginBottom: 8 }}>{actionError}</Text> : null}
-      {actionMessage ? <Text style={{ color: '#1D8A6C', marginBottom: 8 }}>{actionMessage}</Text> : null}
-      <View style={{ flex: 1, flexDirection: 'row', gap: 12 }}>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }}>
-          <Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Active SOS feed</Text>
+      <Header title="Emergency Console" />
+      {actionError ? <Text accessibilityRole="alert" style={{ color: colors.danger, marginBottom: 8 }}>{actionError}</Text> : null}
+      {actionMessage ? <Text style={{ color: colors.primary, marginBottom: 8 }}>{actionMessage}</Text> : null}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, gap: 12 }}>
+          <Text style={{ fontSize: 17, fontWeight: '700' }}>Active SOS feed</Text>
           {active.length === 0 ? <EmptyState message="No active emergency incidents." /> : active.map((incident, index) => {
             const id = field(incident, ['id', 'emergency_id']);
-            return <Card key={`${id}-${index}`} style={{ marginBottom: 8 }}><Text style={{ fontWeight: '700' }}>Incident {id} · {field(incident, ['status'])}</Text><Text style={{ marginVertical: 5 }}>Patient {field(incident, ['patient_id'])} · {field(incident, ['priority'])}</Text><Text>Location: {field(incident, ['address', 'location', 'description'])}</Text><Button title="View details" variant="secondary" onPress={() => void loadDetails(id)} style={{ marginTop: 8 }} /></Card>;
+            const status = field(incident, ['status']);
+            return <Card key={`${id}-${index}`}><Text style={{ fontWeight: '700' }}>Incident {id} · {status}</Text><Text style={{ marginVertical: 5 }}>Patient {field(incident, ['patient_id'])} · {field(incident, ['priority'])}</Text><Text>Location: {field(incident, ['address', 'location', 'description'])}</Text><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}><Button title="View details" variant="secondary" onPress={() => void loadDetails(id)} />{['triggered', 'staff_assigned'].includes(status) ? <Button title="Acknowledge" variant="danger" disabled={busy} onPress={() => void performAction('status', 'acknowledged', id)} /> : null}</View></Card>;
           })}
           <Button title="Refresh feed" variant="secondary" onPress={() => void refreshActive()} />
-        </ScrollView>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }}>
-          <Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Incident details</Text>
+          <Text style={{ fontSize: 17, fontWeight: '700' }}>Incident details</Text>
           {!selectedId ? <EmptyState message="Select an incident to see patient and responder details." /> : detailLoading ? <Loader message="Loading incident…" /> : detailError ? <ErrorState message={detailError} onRetry={() => void loadDetails(selectedId)} /> : (
             <>
               <Card style={{ marginBottom: 8 }}>
@@ -124,13 +124,12 @@ export default function EmergencyConsole() {
               </Card>
               <Card style={{ marginBottom: 8 }}><Text style={{ fontWeight: '700', marginBottom: 8 }}>Status timeline</Text>{['acknowledged_at', 'en_route_at', 'arrived_at'].map((key) => <Text key={key} style={{ paddingVertical: 3 }}>{key.split('_').join(' ')}: {field(details, [key])}</Text>)}</Card>
               <View style={{ gap: 8 }}><Button title="Assign responder" onPress={() => setAssignVisible(true)} /><Button title="Mark en route" variant="secondary" disabled={busy} onPress={() => void performAction('status', 'en_route')} /><Button title="Mark arrived" variant="secondary" disabled={busy} onPress={() => void performAction('status', 'arrived')} /></View>
-              <Card style={{ marginTop: 8 }}><Text style={{ fontWeight: '700', marginBottom: 6 }}>Responder message</Text><TextInput value={message} onChangeText={setMessage} placeholder="Message patient or responder" multiline style={{ minHeight: 60, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} /><Button title="Send message" disabled={busy} onPress={() => void performAction('message')} /></Card>
+              <Card style={{ marginTop: 8 }}><Text style={{ fontWeight: '700', marginBottom: 6 }}>Responder message</Text><TextInput value={message} onChangeText={setMessage} placeholder="Message patient or responder" multiline style={{ minHeight: 60, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} /><Button title="Send message" disabled={busy} onPress={() => void performAction('message')} /></Card>
               {details && Array.isArray(details.messages) ? <Card style={{ marginTop: 8 }}><Text style={{ fontWeight: '700' }}>Conversation</Text>{details.messages.map((entry, index) => <Text key={index} style={{ paddingVertical: 5 }}>{typeof entry === 'object' && entry !== null && 'message' in entry && typeof entry.message === 'string' ? entry.message : 'Message'}</Text>)}</Card> : null}
             </>
           )}
-        </ScrollView>
-      </View>
-      <Modal visible={assignVisible}><Card><Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Assign responder</Text><TextInput value={responderId} onChangeText={setResponderId} placeholder="Responder ID" style={{ borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 10 }} /><View style={{ gap: 8 }}><Button title={busy ? 'Assigning…' : 'Assign'} disabled={busy} onPress={() => void performAction('assign')} /><Button title="Cancel" variant="secondary" disabled={busy} onPress={() => setAssignVisible(false)} /></View></Card></Modal>
+      </ScrollView>
+      <Modal visible={assignVisible}><Card><Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Assign responder</Text><TextInput value={responderId} onChangeText={setResponderId} placeholder="Responder ID" style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 10 }} /><View style={{ gap: 8 }}><Button title={busy ? 'Assigning…' : 'Assign'} disabled={busy} onPress={() => void performAction('assign')} /><Button title="Cancel" variant="secondary" disabled={busy} onPress={() => setAssignVisible(false)} /></View></Card></Modal>
     </ScreenContainer>
   );
 }

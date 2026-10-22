@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, Text, TextInput, View } from 'react-native';
 import { CommonActions, useNavigation, type NavigationProp } from '@react-navigation/native';
 
-import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Loader, Modal, ScreenContainer, SectionHeader } from '../../shared/components';
+import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Header, Loader, Modal, ScreenContainer } from '../../shared/components';
 import { apiClient, buildApiUrl } from '../../shared/services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useRole } from '../../shared/contexts/RoleContext';
@@ -99,9 +99,9 @@ export default function StaffProfile() {
     })(); } },
   ]);
 
-  if (loading) return <Loader message="Loading staff profile…" />;
-  if (error) return <ErrorState message={error} onRetry={() => void refresh()} />;
-  return <ScreenContainer><SectionHeader title="Staff Profile" /><ScrollView contentContainerStyle={{ paddingBottom: 24, gap: 12 }}>
+  if (loading) return <ScreenContainer><Header title="Staff Profile" /><Loader message="Loading staff profile…" /></ScreenContainer>;
+  if (error) return <ScreenContainer><Header title="Staff Profile" /><ErrorState message={error} onRetry={() => void refresh()} /></ScreenContainer>;
+  return <ScreenContainer><Header title="Staff Profile" /><ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, gap: 12 }}>
     {missing.map((endpoint) => <BackendNotAvailable key={endpoint} endpoint={endpoint} />)}
     {actionError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{actionError}</Text> : null}
     {actionMessage ? <Text style={{ color: colors.primary }}>{actionMessage}</Text> : null}

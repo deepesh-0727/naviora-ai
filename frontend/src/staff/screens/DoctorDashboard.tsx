@@ -1,8 +1,9 @@
 import { colors } from '../../shared/theme/colors';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Loader, ScreenContainer, SectionHeader } from '../../shared/components';
+import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Header, Loader, ScreenContainer } from '../../shared/components';
 import { apiClient, buildApiUrl } from '../../shared/services/api';
 import { websocketClient } from '../../shared/services/websocket';
 
@@ -71,21 +72,30 @@ export default function DoctorDashboard() {
     return () => { unsubscribeQueue(); unsubscribeEmergency(); };
   }, [refresh]);
 
-  if (loading) return <Loader message="Loading your schedule…" />;
-  if (missingEndpoint) return <ScreenContainer><BackendNotAvailable endpoint={missingEndpoint} /><Button title="Retry" variant="secondary" onPress={() => void refresh()} /></ScreenContainer>;
-  if (error) return <ErrorState message={error} onRetry={() => void refresh()} />;
+  if (loading) return <ScreenContainer><Header title="Doctor Dashboard" /><Loader message="Loading your schedule…" /></ScreenContainer>;
+  if (missingEndpoint) return <ScreenContainer><Header title="Doctor Dashboard" /><BackendNotAvailable endpoint={missingEndpoint} /><Button title="Retry" variant="secondary" onPress={() => void refresh()} /></ScreenContainer>;
+  if (error) return <ScreenContainer><Header title="Doctor Dashboard" /><ErrorState message={error} onRetry={() => void refresh()} /></ScreenContainer>;
   if (data.stats === null && data.schedule.length === 0 && data.queue.length === 0) {
-    return <ScreenContainer><SectionHeader title="Doctor Dashboard" /><EmptyState message="No schedule or queue entries for today." /><Button title="Refresh" variant="secondary" onPress={() => void refresh()} /></ScreenContainer>;
+    return <ScreenContainer><Header title="Doctor Dashboard" /><EmptyState message="No schedule or queue entries for today." /><Button title="Refresh" variant="secondary" onPress={() => void refresh()} /></ScreenContainer>;
   }
 
   return (
     <ScreenContainer>
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        <SectionHeader title="Doctor Dashboard" />
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+        <Header title="Doctor Dashboard" />
         {emergencyAlert ? <Card style={{ marginBottom: 12, backgroundColor: colors.dangerLight }}><Text style={{ color: colors.danger, fontWeight: '700' }}>New emergency response requested.</Text></Card> : null}
-        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-          {['total_patients', 'completed', 'waiting', 'pending_prescriptions'].map((key) => (
-            <Card key={key} style={{ flex: 1 }}><Text style={{ fontSize: 20, fontWeight: '700' }}>{field(data.stats ?? {}, [key])}</Text><Text style={{ color: colors.textMuted }}>{key.split('_').join(' ')}</Text></Card>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+          {[
+            { key: 'total_patients', icon: 'people-outline' as const },
+            { key: 'completed', icon: 'checkmark-circle-outline' as const },
+            { key: 'waiting', icon: 'time-outline' as const },
+            { key: 'pending_prescriptions', icon: 'medkit-outline' as const },
+          ].map(({ key, icon }) => (
+            <Card key={key} style={{ flexBasis: '47%', flexGrow: 1, minWidth: 140 }}>
+              <Ionicons name={icon} size={20} color={colors.primary} />
+              <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text, marginTop: 8 }}>{field(data.stats ?? {}, [key])}</Text>
+              <Text style={{ color: colors.textMuted }}>{key.split('_').join(' ')}</Text>
+            </Card>
           ))}
         </View>
         <Card style={{ marginBottom: 12 }}>

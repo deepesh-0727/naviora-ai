@@ -2,7 +2,7 @@ import { colors } from '../../shared/theme/colors';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 
-import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Loader, ScreenContainer, SectionHeader } from '../../shared/components';
+import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Header, Loader, ScreenContainer } from '../../shared/components';
 import { apiClient, buildApiUrl } from '../../shared/services/api';
 import { websocketClient } from '../../shared/services/websocket';
 import { useWardState } from '../hooks/useWardState';
@@ -97,8 +97,8 @@ export default function NurseDashboard() {
 
   return (
     <ScreenContainer>
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        <SectionHeader title="Nurse Dashboard" />
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+        <Header title="Nurse Dashboard" />
         {(error || bedsError) ? <ErrorState message={error ?? bedsError ?? 'Could not load ward state.'} onRetry={() => { void refreshTasks(); void refreshBeds(); }} /> : null}
         {missingEndpoint || bedsUnavailable ? <BackendNotAvailable endpoint={missingEndpoint ?? 'GET /staff/nurse/ward/{id}/beds'} /> : null}
         {actionMessage ? <Text style={{ color: colors.primary, marginBottom: 10 }}>{actionMessage}</Text> : null}

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
 
-import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Loader, ScreenContainer, SectionHeader, Toast } from '../../shared/components';
+import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Header, Loader, ScreenContainer, Toast } from '../../shared/components';
 import { apiClient, buildApiUrl } from '../../shared/services/api';
 import { useDoctorQueue } from '../hooks/useDoctorQueue';
 import type { DoctorQueueEntry } from '../hooks/useDoctorQueue';
@@ -71,16 +71,16 @@ export default function DoctorQueue() {
     }
   };
 
-  if (loading) return <Loader message="Loading queue…" />;
-  if (backendUnavailable) return <ScreenContainer><BackendNotAvailable endpoint="GET /staff/doctor/queue" /><Button title="Retry" variant="secondary" onPress={() => void refresh()} /></ScreenContainer>;
-  if (error) return <ErrorState message={error} onRetry={() => void refresh()} />;
+  if (loading) return <ScreenContainer><Header title="Doctor Queue" /><Loader message="Loading queue…" /></ScreenContainer>;
+  if (backendUnavailable) return <ScreenContainer><Header title="Doctor Queue" /><BackendNotAvailable endpoint="GET /staff/doctor/queue" /><Button title="Retry" variant="secondary" onPress={() => void refresh()} /></ScreenContainer>;
+  if (error) return <ScreenContainer><Header title="Doctor Queue" /><ErrorState message={error} onRetry={() => void refresh()} /></ScreenContainer>;
 
   return (
     <ScreenContainer>
-      <SectionHeader title="Doctor Queue" />
+      <Header title="Doctor Queue" />
       {actionToast ? <Toast message={actionToast} /> : null}
       {empty ? <EmptyState message="No patients in queue. Enjoy your break!" /> : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
           {queue.map((entry, index) => {
             const id = display(entry, ['id', 'appointment_id']);
             return (

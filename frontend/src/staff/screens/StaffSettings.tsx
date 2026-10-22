@@ -1,7 +1,8 @@
+import { colors } from '../../shared/theme/colors';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, Switch, Text, View } from 'react-native';
 
-import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Loader, ScreenContainer, SectionHeader } from '../../shared/components';
+import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Header, Loader, ScreenContainer } from '../../shared/components';
 import { apiClient, buildApiUrl } from '../../shared/services/api';
 import appConfig from '../../../app.json';
 
@@ -74,15 +75,15 @@ export default function StaffSettings() {
     ]);
   };
 
-  if (loading) return <Loader message="Loading staff settings…" />;
-  if (unavailable) return <ScreenContainer><BackendNotAvailable endpoint="GET /staff/settings" /><Button title="Retry" variant="secondary" onPress={() => void refresh()} /></ScreenContainer>;
-  if (error) return <ErrorState message={error} onRetry={() => void refresh()} />;
+  if (loading) return <ScreenContainer><Header title="Staff Settings" /><Loader message="Loading staff settings…" /></ScreenContainer>;
+  if (unavailable) return <ScreenContainer><Header title="Staff Settings" /><BackendNotAvailable endpoint="GET /staff/settings" /><Button title="Retry" variant="secondary" onPress={() => void refresh()} /></ScreenContainer>;
+  if (error) return <ScreenContainer><Header title="Staff Settings" /><ErrorState message={error} onRetry={() => void refresh()} /></ScreenContainer>;
 
   const preferences = Object.entries(settings ?? {}).filter(([, value]) => typeof value === 'boolean');
-  return <ScreenContainer><SectionHeader title="Staff Settings" /><ScrollView contentContainerStyle={{ paddingBottom: 24, gap: 12 }}>
-    {actionError ? <Text accessibilityRole="alert" style={{ color: '#B42318' }}>{actionError}</Text> : null}
+  return <ScreenContainer><Header title="Staff Settings" /><ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, gap: 12 }}>
+    {actionError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{actionError}</Text> : null}
     <Card><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Preferences</Text>{preferences.length ? preferences.map(([key, value]) => <View key={key} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 7 }}><Text style={{ textTransform: 'capitalize', flex: 1 }}>{label(key)}</Text><Switch value={value === true} disabled={savingKey === key} onValueChange={(enabled) => void updateToggle(key, enabled)} /></View>) : <EmptyState message="No toggle preferences are configured for this account." />}</Card>
-    <Card><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Signed-in devices</Text>{devices.length ? devices.map((device, index) => <View key={String(device.id ?? device.device_id ?? index)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}><View style={{ flex: 1 }}><Text style={{ fontWeight: '600' }}>{String(device.name ?? device.device_name ?? 'Device')}</Text><Text style={{ color: '#5F6975' }}>{String(device.last_seen ?? device.platform ?? '')}</Text></View><Button title="Remove" variant="danger" onPress={() => removeDevice(device)} /></View>) : <EmptyState message="No other devices are registered." />}</Card>
+    <Card><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Signed-in devices</Text>{devices.length ? devices.map((device, index) => <View key={String(device.id ?? device.device_id ?? index)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}><View style={{ flex: 1 }}><Text style={{ fontWeight: '600' }}>{String(device.name ?? device.device_name ?? 'Device')}</Text><Text style={{ color: colors.textMuted }}>{String(device.last_seen ?? device.platform ?? '')}</Text></View><Button title="Remove" variant="danger" onPress={() => removeDevice(device)} /></View>) : <EmptyState message="No other devices are registered." />}</Card>
     <Card><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>About</Text><Text>App version: {appConfig.expo.version}</Text><Text>Build number: Not configured</Text></Card>
     <Button title="Retry settings" variant="secondary" onPress={() => void refresh()} />
   </ScrollView></ScreenContainer>;

@@ -40,7 +40,7 @@ async def current_shift(
     )
     schedule = result.scalar_one_or_none()
     if schedule is None:
-        raise HTTPException(status_code=404, detail="No active shift is scheduled for this account.")
+        return None
     return schedule
 
 
