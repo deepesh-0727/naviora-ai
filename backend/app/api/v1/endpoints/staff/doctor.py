@@ -27,12 +27,20 @@ async def _doctor_id(db: AsyncSession, user: User) -> int:
 
 @router.get("/schedule")
 async def schedule(
-    schedule_date: date | None = Query(default=None, alias="date"),
+    schedule_date: str | None = Query(default=None, alias="date"),
     current_user: User = Depends(deps.check_role(["doctor"])),
     db: AsyncSession = Depends(get_db),
 ):
     doctor_id = await _doctor_id(db, current_user)
-    start = datetime.combine(schedule_date or date.today(), time.min)
+    if schedule_date is None or schedule_date.lower() == "today":
+        target_date = date.today()
+    else:
+        try:
+            target_date = date.fromisoformat(schedule_date)
+        except ValueError as exc:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=422, detail="date must be 'today' or an ISO date (YYYY-MM-DD).") from exc
+    start = datetime.combine(target_date, time.min)
     end = start + timedelta(days=1)
     result = await db.execute(
         select(Appointment, Patient.first_name, Patient.last_name)

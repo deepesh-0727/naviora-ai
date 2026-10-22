@@ -1,3 +1,4 @@
+import { colors } from '../../shared/theme/colors';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
@@ -7,7 +8,7 @@ import { apiClient, buildApiUrl } from '../../shared/services/api';
 import { useDoctorQueue } from '../hooks/useDoctorQueue';
 import type { DoctorQueueEntry } from '../hooks/useDoctorQueue';
 
-type DoctorNavigation = NavigationProp<{ PatientDetail: { patientId: string | number } }>;
+type DoctorNavigation = NavigationProp<{ PatientDetail: { patientId: string | number; appointmentId?: string } }>;
 
 function display(entry: DoctorQueueEntry, keys: string[]): string {
   for (const key of keys) {
@@ -78,17 +79,17 @@ export default function DoctorQueue() {
     <ScreenContainer>
       <SectionHeader title="Doctor Queue" />
       {actionToast ? <Toast message={actionToast} /> : null}
-      {empty ? <EmptyState message="No patients are waiting." /> : (
+      {empty ? <EmptyState message="No patients in queue. Enjoy your break!" /> : (
         <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
           {queue.map((entry, index) => {
             const id = display(entry, ['id', 'appointment_id']);
             return (
               <Card key={`${id}-${index}`} style={{ marginBottom: 10 }}>
                 <Text style={{ fontWeight: '700', fontSize: 16 }}>#{display(entry, ['position', 'queue_position'])} · Patient {display(entry, ['patient_id'])}</Text>
-                <Text style={{ color: '#5F6975', marginVertical: 8 }}>Status: {display(entry, ['status'])} · Priority: {display(entry, ['priority'])}</Text>
+                <Text style={{ color: colors.textMuted, marginVertical: 8 }}>Status: {display(entry, ['status'])} · Priority: {display(entry, ['priority'])}</Text>
                 <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
                   <Button title="Move up" variant="secondary" disabled={Boolean(pendingAction) || index === 0} onPress={() => void updateEntry(entry, 'up')} />
-                  <Button title="View patient" variant="secondary" disabled={Boolean(pendingAction)} onPress={() => navigation.navigate('PatientDetail', { patientId: display(entry, ['patient_id']) })} />
+                  <Button title="View patient" variant="secondary" disabled={Boolean(pendingAction)} onPress={() => navigation.navigate('PatientDetail', { patientId: display(entry, ['patient_id']), appointmentId: id })} />
                   <Button
                     title="Mark In-Room"
                     loading={pendingAction?.appointmentId === id && pendingAction.action === 'in_room'}

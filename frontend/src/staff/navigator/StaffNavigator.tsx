@@ -18,6 +18,7 @@ import EmergencyConsole from '../screens/EmergencyConsole';
 import StaffNotifications from '../screens/StaffNotifications';
 import StaffProfile from '../screens/StaffProfile';
 import StaffSettings from '../screens/StaffSettings';
+import { colors } from '../../shared/theme/colors';
 
 type TabIconName = ComponentProps<typeof Ionicons>['name'];
 type TabDefinition = { name: string; title: string; endpoint: string; icon: TabIconName };
@@ -77,8 +78,8 @@ function RoleTabs({ role }: { role: Exclude<Role, 'patient' | 'admin' | 'super_a
           return {
             headerShown: false,
             tabBarIcon: ({ color, size }) => <Ionicons name={definition?.icon ?? 'ellipse-outline'} size={size} color={color} />,
-            tabBarActiveTintColor: '#1D8A6C',
-            tabBarInactiveTintColor: '#8899AA',
+            tabBarActiveTintColor: colors.primary,
+            tabBarInactiveTintColor: colors.textMuted,
           };
         }}
       >

@@ -1,3 +1,4 @@
+import { colors } from '../../shared/theme/colors';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 
@@ -92,7 +93,7 @@ export default function NurseDashboard() {
     } finally { setLoading(false); }
   };
 
-  const bedColor = (status: string) => status.toLowerCase() === 'occupied' ? '#FADBD8' : status.toLowerCase() === 'critical' ? '#F5B7B1' : status.toLowerCase() === 'cleaning' ? '#FCF3CF' : '#D5F5E3';
+  const bedColor = (status: string) => status.toLowerCase() === 'occupied' ? colors.dangerLight : status.toLowerCase() === 'critical' ? colors.dangerLight : status.toLowerCase() === 'cleaning' ? colors.amberSoft : colors.primaryLight;
 
   return (
     <ScreenContainer>
@@ -100,10 +101,10 @@ export default function NurseDashboard() {
         <SectionHeader title="Nurse Dashboard" />
         {(error || bedsError) ? <ErrorState message={error ?? bedsError ?? 'Could not load ward state.'} onRetry={() => { void refreshTasks(); void refreshBeds(); }} /> : null}
         {missingEndpoint || bedsUnavailable ? <BackendNotAvailable endpoint={missingEndpoint ?? 'GET /staff/nurse/ward/{id}/beds'} /> : null}
-        {actionMessage ? <Text style={{ color: '#1D8A6C', marginBottom: 10 }}>{actionMessage}</Text> : null}
+        {actionMessage ? <Text style={{ color: colors.primary, marginBottom: 10 }}>{actionMessage}</Text> : null}
         <Card style={{ marginBottom: 12 }}>
           <Text style={{ fontWeight: '700', marginBottom: 8 }}>Ward</Text>
-          <TextInput value={wardIdInput} onChangeText={setWardIdInput} placeholder="Enter assigned ward ID" style={{ borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} />
+          <TextInput value={wardIdInput} onChangeText={setWardIdInput} placeholder="Enter assigned ward ID" style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} />
           <Button title="Load ward tasks" onPress={() => { void refreshBeds(); void refreshTasks(); }} />
         </Card>
         <Card style={{ marginBottom: 12 }}>
@@ -118,19 +119,19 @@ export default function NurseDashboard() {
         {loading ? <Loader message="Loading nursing tasks…" /> : null}
         <Card style={{ marginBottom: 12 }}><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Medication timeline</Text>{medications.length ? medications.map((item, index) => <Text key={textValue(item, ['id']) + index} style={{ paddingVertical: 5 }}>{textValue(item, ['due_at', 'scheduled_time'])} · Patient {textValue(item, ['patient_id'])} · {textValue(item, ['medication', 'name'])}</Text>) : <EmptyState message="No medication doses are due." />}</Card>
         <Card style={{ marginBottom: 12 }}><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Vitals due</Text>{vitalsDue.length ? vitalsDue.map((item, index) => <Text key={textValue(item, ['patient_id']) + index} style={{ paddingVertical: 5 }}>Patient {textValue(item, ['patient_id'])} · {textValue(item, ['due_at', 'reason'])}</Text>) : <EmptyState message="No vitals are currently due." />}</Card>
-        <Card style={{ marginBottom: 12 }}><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Live alerts</Text>{alerts.length ? alerts.map((alert, index) => <Text key={`${alert}-${index}`} style={{ color: '#B42318', paddingVertical: 4 }}>{alert}</Text>) : <EmptyState message="No active ward alerts." />}</Card>
+        <Card style={{ marginBottom: 12 }}><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Live alerts</Text>{alerts.length ? alerts.map((alert, index) => <Text key={`${alert}-${index}`} style={{ color: colors.danger, paddingVertical: 4 }}>{alert}</Text>) : <EmptyState message="No active ward alerts." />}</Card>
         <Card><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Record care / handover</Text>
-          <TextInput value={patientId} onChangeText={setPatientId} placeholder="Patient ID (leave blank for handover)" keyboardType="number-pad" style={{ borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} />
+          <TextInput value={patientId} onChangeText={setPatientId} placeholder="Patient ID (leave blank for handover)" keyboardType="number-pad" style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} />
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TextInput value={systolic} onChangeText={setSystolic} keyboardType="number-pad" placeholder="Systolic" style={{ flex: 1, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} />
-            <TextInput value={diastolic} onChangeText={setDiastolic} keyboardType="number-pad" placeholder="Diastolic" style={{ flex: 1, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} />
+            <TextInput value={systolic} onChangeText={setSystolic} keyboardType="number-pad" placeholder="Systolic" style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} />
+            <TextInput value={diastolic} onChangeText={setDiastolic} keyboardType="number-pad" placeholder="Diastolic" style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} />
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TextInput value={heartRate} onChangeText={setHeartRate} keyboardType="number-pad" placeholder="Heart rate" style={{ flex: 1, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} />
-            <TextInput value={temperature} onChangeText={setTemperature} keyboardType="decimal-pad" placeholder="Temp °C" style={{ flex: 1, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} />
-            <TextInput value={spo2} onChangeText={setSpo2} keyboardType="number-pad" placeholder="SpO₂" style={{ flex: 1, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} />
+            <TextInput value={heartRate} onChangeText={setHeartRate} keyboardType="number-pad" placeholder="Heart rate" style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} />
+            <TextInput value={temperature} onChangeText={setTemperature} keyboardType="decimal-pad" placeholder="Temp °C" style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} />
+            <TextInput value={spo2} onChangeText={setSpo2} keyboardType="number-pad" placeholder="SpO₂" style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} />
           </View>
-          <TextInput value={notes} onChangeText={setNotes} placeholder="Vitals, medication, or handover details" multiline style={{ borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, minHeight: 72, marginBottom: 8 }} />
+          <TextInput value={notes} onChangeText={setNotes} placeholder="Vitals, medication, or handover details" multiline style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, minHeight: 72, marginBottom: 8 }} />
           <View style={{ gap: 8 }}><Button title="Record vitals" disabled={loading} onPress={() => void sendAction('vitals')} /><Button title="Record medication" variant="secondary" disabled={loading} onPress={() => void sendAction('medication')} /><Button title="Submit handover" variant="secondary" disabled={loading} onPress={() => void sendAction('handover')} /></View>
         </Card>
       </ScrollView>

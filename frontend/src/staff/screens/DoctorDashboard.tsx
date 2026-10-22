@@ -1,3 +1,4 @@
+import { colors } from '../../shared/theme/colors';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
@@ -38,7 +39,7 @@ export default function DoctorDashboard() {
     setMissingEndpoint(null);
     try {
       const [schedule, queue, stats] = await Promise.all([
-        apiClient.get<unknown>(buildApiUrl('doctor', '/doctor/schedule')),
+        apiClient.get<unknown>(buildApiUrl('doctor', '/doctor/schedule?date=today')),
         apiClient.get<unknown>(buildApiUrl('doctor', '/doctor/queue')),
         apiClient.get<unknown>(buildApiUrl('doctor', '/doctor/stats/today')),
       ]);
@@ -81,21 +82,21 @@ export default function DoctorDashboard() {
     <ScreenContainer>
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         <SectionHeader title="Doctor Dashboard" />
-        {emergencyAlert ? <Card style={{ marginBottom: 12, backgroundColor: '#FFF0EF' }}><Text style={{ color: '#B42318', fontWeight: '700' }}>New emergency response requested.</Text></Card> : null}
+        {emergencyAlert ? <Card style={{ marginBottom: 12, backgroundColor: colors.dangerLight }}><Text style={{ color: colors.danger, fontWeight: '700' }}>New emergency response requested.</Text></Card> : null}
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
           {['total_patients', 'completed', 'waiting', 'pending_prescriptions'].map((key) => (
-            <Card key={key} style={{ flex: 1 }}><Text style={{ fontSize: 20, fontWeight: '700' }}>{field(data.stats ?? {}, [key])}</Text><Text style={{ color: '#5F6975' }}>{key.split('_').join(' ')}</Text></Card>
+            <Card key={key} style={{ flex: 1 }}><Text style={{ fontSize: 20, fontWeight: '700' }}>{field(data.stats ?? {}, [key])}</Text><Text style={{ color: colors.textMuted }}>{key.split('_').join(' ')}</Text></Card>
           ))}
         </View>
         <Card style={{ marginBottom: 12 }}>
           <Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Today’s schedule</Text>
-          {data.schedule.length === 0 ? <Text style={{ color: '#5F6975' }}>No appointments scheduled.</Text> : data.schedule.map((entry, index) => (
+          {data.schedule.length === 0 ? <Text style={{ color: colors.textMuted }}>No appointments scheduled.</Text> : data.schedule.map((entry, index) => (
             <Text key={field(entry, ['id']) + index} style={{ paddingVertical: 6 }}>{field(entry, ['scheduled_time', 'time'])}  ·  {field(entry, ['patient_name', 'name'])}  ·  {field(entry, ['status'])}</Text>
           ))}
         </Card>
         <Card>
           <Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Live queue</Text>
-          {data.queue.length === 0 ? <Text style={{ color: '#5F6975' }}>The queue is clear.</Text> : data.queue.map((entry, index) => (
+          {data.queue.length === 0 ? <Text style={{ color: colors.textMuted }}>The queue is clear.</Text> : data.queue.map((entry, index) => (
             <Text key={field(entry, ['id', 'appointment_id']) + index} style={{ paddingVertical: 6 }}>#{field(entry, ['position', 'queue_position'])}  ·  Patient {field(entry, ['patient_id'])}  ·  {field(entry, ['status'])}</Text>
           ))}
         </Card>

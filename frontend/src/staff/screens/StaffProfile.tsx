@@ -1,9 +1,14 @@
+import { colors } from '../../shared/theme/colors';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
-import { useNavigation, type NavigationProp } from '@react-navigation/native';
+import { Alert, ScrollView, Text, TextInput, View } from 'react-native';
+import { CommonActions, useNavigation, type NavigationProp } from '@react-navigation/native';
 
 import { BackendNotAvailable, Button, Card, EmptyState, ErrorState, Loader, Modal, ScreenContainer, SectionHeader } from '../../shared/components';
 import { apiClient, buildApiUrl } from '../../shared/services/api';
+import { useAuth } from '../../context/AuthContext';
+import { useRole } from '../../shared/contexts/RoleContext';
+import { clearTokens } from '../../shared/services/secure_store';
+import { websocketClient } from '../../shared/services/websocket';
 
 type Entry = Record<string, unknown>;
 type ProfileNavigation = NavigationProp<{ StaffSettings: undefined }>;
@@ -25,6 +30,8 @@ function records(value: unknown): Entry[] {
 
 export default function StaffProfile() {
   const navigation = useNavigation<ProfileNavigation>();
+  const { signOut } = useAuth();
+  const { logout } = useRole();
   const [profile, setProfile] = useState<Entry | null>(null);
   const [shift, setShift] = useState<Entry | null>(null);
   const [attendance, setAttendance] = useState<Entry[]>([]);
@@ -81,15 +88,26 @@ export default function StaffProfile() {
     } finally { setBusy(false); }
   };
 
+  const confirmLogout = () => Alert.alert('Log out?', 'You will need to sign in again to access your staff account.', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Log out', style: 'destructive', onPress: () => { void (async () => {
+      websocketClient.disconnect();
+      await clearTokens();
+      await logout();
+      await signOut();
+      navigation.getParent()?.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'RoleSelect' as never }] }));
+    })(); } },
+  ]);
+
   if (loading) return <Loader message="Loading staff profile…" />;
   if (error) return <ErrorState message={error} onRetry={() => void refresh()} />;
   return <ScreenContainer><SectionHeader title="Staff Profile" /><ScrollView contentContainerStyle={{ paddingBottom: 24, gap: 12 }}>
     {missing.map((endpoint) => <BackendNotAvailable key={endpoint} endpoint={endpoint} />)}
-    {actionError ? <Text accessibilityRole="alert" style={{ color: '#B42318' }}>{actionError}</Text> : null}
-    {actionMessage ? <Text style={{ color: '#1D8A6C' }}>{actionMessage}</Text> : null}
-    {profile ? <Card><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Account</Text>{values(profile).map(([label, value]) => <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}><Text style={{ color: '#5F6975', flex: 1 }}>{label}</Text><Text style={{ flex: 1, textAlign: 'right' }}>{value}</Text></View>)}</Card> : null}
+    {actionError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{actionError}</Text> : null}
+    {actionMessage ? <Text style={{ color: colors.primary }}>{actionMessage}</Text> : null}
+    {profile ? <Card><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Account</Text>{values(profile).map(([label, value]) => <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}><Text style={{ color: colors.textMuted, flex: 1 }}>{label}</Text><Text style={{ flex: 1, textAlign: 'right' }}>{value}</Text></View>)}</Card> : null}
     {shift ? <Card><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Current shift</Text>{values(shift).map(([label, value]) => <Text key={label} style={{ paddingVertical: 4 }}>{label}: {value}</Text>)}</Card> : null}
     <Card><Text style={{ fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Attendance</Text>{attendance.length ? attendance.map((entry, index) => <Text key={String(entry.id ?? index)} style={{ paddingVertical: 4 }}>{values(entry).map(([label, value]) => `${label}: ${value}`).join(' · ')}</Text>) : <EmptyState message="No attendance records are available." />}</Card>
-    <View style={{ gap: 8 }}><Button title="Request shift swap" onPress={() => { setModal('swap'); setActionError(null); }} /><Button title="Request leave" variant="secondary" onPress={() => { setModal('leave'); setActionError(null); }} /><Button title="Staff settings" variant="secondary" onPress={() => navigation.navigate('StaffSettings')} /><Button title="Refresh profile" variant="secondary" onPress={() => void refresh()} /></View>
-  </ScrollView><Modal visible={modal !== null}><Card><Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>{modal === 'swap' ? 'Shift swap request' : 'Leave request'}</Text>{modal === 'swap' ? <TextInput value={requestText} onChangeText={setRequestText} placeholder="Requested shift and colleague" multiline style={{ minHeight: 80, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} /> : <><TextInput value={leaveStart} onChangeText={setLeaveStart} placeholder="Start date (YYYY-MM-DD)" style={{ borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} /><TextInput value={leaveEnd} onChangeText={setLeaveEnd} placeholder="End date (YYYY-MM-DD)" style={{ borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} /><TextInput value={leaveReason} onChangeText={setLeaveReason} placeholder="Reason for leave" multiline style={{ minHeight: 60, borderWidth: 1, borderColor: '#DDE5EE', borderRadius: 10, padding: 10, marginBottom: 8 }} /></>}<View style={{ gap: 8 }}><Button title={busy ? 'Submitting…' : 'Submit request'} disabled={busy} onPress={() => void submitRequest()} /><Button title="Cancel" variant="secondary" disabled={busy} onPress={() => setModal(null)} /></View></Card></Modal></ScreenContainer>;
+    <View style={{ gap: 8 }}><Button title="Request shift swap" onPress={() => { setModal('swap'); setActionError(null); }} /><Button title="Request leave" variant="secondary" onPress={() => { setModal('leave'); setActionError(null); }} /><Button title="Staff settings" variant="secondary" onPress={() => navigation.navigate('StaffSettings')} /><Button title="Refresh profile" variant="secondary" onPress={() => void refresh()} /><Button title="Log out" variant="danger" onPress={confirmLogout} /></View>
+  </ScrollView><Modal visible={modal !== null}><Card><Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>{modal === 'swap' ? 'Shift swap request' : 'Leave request'}</Text>{modal === 'swap' ? <TextInput value={requestText} onChangeText={setRequestText} placeholder="Requested shift and colleague" multiline style={{ minHeight: 80, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} /> : <><TextInput value={leaveStart} onChangeText={setLeaveStart} placeholder="Start date (YYYY-MM-DD)" style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} /><TextInput value={leaveEnd} onChangeText={setLeaveEnd} placeholder="End date (YYYY-MM-DD)" style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} /><TextInput value={leaveReason} onChangeText={setLeaveReason} placeholder="Reason for leave" multiline style={{ minHeight: 60, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 }} /></>}<View style={{ gap: 8 }}><Button title={busy ? 'Submitting…' : 'Submit request'} disabled={busy} onPress={() => void submitRequest()} /><Button title="Cancel" variant="secondary" disabled={busy} onPress={() => setModal(null)} /></View></Card></Modal></ScreenContainer>;
 }
