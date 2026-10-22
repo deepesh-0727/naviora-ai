@@ -11,7 +11,7 @@ from app.models.user import User
 
 router = APIRouter()
 ADMIN_ROLES = ["admin", "super_admin"]
-SAFE_SETTING_KEYS = {"maintenance_mode", "appointment_booking_enabled", "default_language", "support_contact"}
+SAFE_SETTING_KEYS = {"maintenance_mode", "appointment_booking_enabled", "default_language", "support_contact", "hospital_profile"}
 
 
 class SettingUpdate(BaseModel):

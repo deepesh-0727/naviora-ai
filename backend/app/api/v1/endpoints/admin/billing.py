@@ -1,4 +1,7 @@
 from decimal import Decimal
+from datetime import datetime
+from typing import Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -8,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
 from app.db.session import get_db
 from app.models.billing import Billing
+from app.models.patient import Patient
 from app.models.operations import BillingRefund
 from app.models.user import User
 
@@ -21,6 +25,12 @@ class RefundRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=4000)
 
 
+class AdminInvoiceCreate(BaseModel):
+    patient_id: int = Field(gt=0)
+    amount: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
+    status: Literal["pending", "cancelled"] = "pending"
+
+
 @router.get("/bills")
 async def list_bills(limit: int = 100, offset: int = 0, current_user: User = Depends(deps.check_role(ADMIN_ROLES)), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Billing).order_by(Billing.created_at.desc()).offset(max(offset, 0)).limit(min(max(limit, 1), 1000)))
@@ -31,6 +41,24 @@ async def list_bills(limit: int = 100, offset: int = 0, current_user: User = Dep
 async def list_invoices(current_user: User = Depends(deps.check_role(ADMIN_ROLES)), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Billing).order_by(Billing.created_at.desc()))
     return {"items": result.scalars().all()}
+
+
+@router.post("/invoices", status_code=status.HTTP_201_CREATED)
+async def create_invoice(payload: AdminInvoiceCreate, current_user: User = Depends(deps.check_role(ADMIN_ROLES)), db: AsyncSession = Depends(get_db)):
+    patient = await db.get(Patient, payload.patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Patient not found.")
+    invoice = Billing(
+        patient_id=patient.id,
+        amount=payload.amount,
+        status=payload.status,
+        invoice_number=f"INV-{datetime.utcnow():%Y%m%d}-{uuid4().hex[:8].upper()}",
+        items=[{"name": "Admin invoice", "quantity": 1, "price": str(payload.amount)}],
+    )
+    db.add(invoice)
+    await db.commit()
+    await db.refresh(invoice)
+    return invoice
 
 
 @router.get("/payments")
