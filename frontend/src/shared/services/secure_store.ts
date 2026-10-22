@@ -34,4 +34,8 @@ export const saveRole = async (role: string): Promise<void> => {
   await SecureStore.setItemAsync(keys.role, role);
 };
 
+export const clearRole = async (): Promise<void> => {
+  await SecureStore.deleteItemAsync(keys.role);
+};
+
 export const getRole = async (): Promise<string | null> => SecureStore.getItemAsync(keys.role);

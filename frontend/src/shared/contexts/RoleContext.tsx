@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import { subscribeToAuthExpired } from '../services/auth_events';
-import { getAccessToken, getRefreshToken, getRole, clearTokens, saveRole, saveTokens } from '../services/secure_store';
+import { getAccessToken, getRefreshToken, getRole, clearRole, clearTokens, saveRole, saveTokens } from '../services/secure_store';
 import type { AuthTokens, Role, RoleUser, Zone } from '../types/roles';
 import { zoneForRole } from '../types/roles';
 
@@ -85,11 +85,13 @@ export const RoleProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const logout = async () => {
-    await clearTokens();
-    await saveRole('patient');
-    setRole(null);
-    setUser(null);
-    setTokens({ accessToken: null, refreshToken: null });
+    try {
+      await Promise.all([clearTokens(), clearRole()]);
+    } finally {
+      setRole(null);
+      setUser(null);
+      setTokens({ accessToken: null, refreshToken: null });
+    }
   };
 
   const value = useMemo<RoleContextValue>(() => {
